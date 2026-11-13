@@ -1,0 +1,14 @@
+World
+	Ocean 0.5
+	Continent 0.5
+
+	Ocean - contient : Linear 1.5
+
+Continent
+	Plaine
+	Montagne
+
+	Plaine - Montagne : 
+	
+
+
