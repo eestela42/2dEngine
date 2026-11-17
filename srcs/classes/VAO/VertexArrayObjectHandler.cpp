@@ -24,7 +24,7 @@ void VertexArrayObjectHandler::Draw(u_int type) {
 
 void VertexArrayObjectHandler::DrawElements() {	
 	if (activeVAO) {	
-		glDrawElements(GL_TRIANGLES, vaoMap[activeVAO - 1]->GetIndicesDataSize(), GL_UNSIGNED_INT, 0);	
+		glDrawElements(GL_TRIANGLES, vaoMap[activeVAO]->GetIndicesSize(), GL_UNSIGNED_INT, nullptr);	
 	}
 }
 
@@ -51,7 +51,7 @@ void VertexArrayObjectHandler::DrawAllElements() {
 	for (auto const& x : vaoMap)
 	{
 		x.second->Bind();
-		glDrawElements(GL_TRIANGLES, x.second->GetIndicesDataSize(), GL_UNSIGNED_INT, 0);
+		glDrawElements(GL_TRIANGLES, x.second->GetIndicesSize(), GL_UNSIGNED_INT, nullptr);
 		x.second->Unbind();
 	}
 }

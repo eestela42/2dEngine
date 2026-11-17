@@ -3,6 +3,7 @@
 
 #include <classes/World/ChunkClassic.hpp>
 #include <classes/World/ChunkRLE.hpp>
+#include <classes/World/Chunk2D.hpp>
 #include <glm/glm.hpp>
 #include <deque>
 #include <memory>

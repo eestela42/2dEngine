@@ -18,6 +18,7 @@ Game::Game()
 	inputHandler->AddCallback((I_Input*)this); // c'est quoi c'truc
 	inputHandler->AddCallback((I_Input*)window);
 	shaderHandler = new ShaderHandler("shaders");
+	
 
 	vertexArrayObjectHandler = new VertexArrayObjectHandler();
 
@@ -372,7 +373,6 @@ void Game::Loop() {
 
 	
 	inputHandler->HandleInput();
-	
 	glm::mat4 view = glm::lookAt(cameraPosition, cameraPosition + cameraDirection, cameraUp);
 	glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)DEFAULT_WINDOW_WIDTH/(float)DEFAULT_WINDOW_HEIGHT, 0.1f, 16000.0f);
 	glm::mat4 matrix = glm::mat4(1.0f);
@@ -398,7 +398,8 @@ void Game::Loop() {
 	
 	
 
-	shaderHandler->Use("RLE-Geometry");
+	// shaderHandler->Use("RLE-Regular");
+	shaderHandler->Use("default");
 	if (Shader::GetActiveShader()) {
 		Shader::GetActiveShader()->SetFloat4("cameraPos", cameraPosition.x, cameraPosition.y, cameraPosition.z, 0);
 		Shader::GetActiveShader()->Setmat4("matrix", matrix);
@@ -463,7 +464,7 @@ void Game::Loop() {
 
 void Game::draw()
 {
-	vertexArrayObjectHandler->DrawAll(1);
+	vertexArrayObjectHandler->DrawAll(0);
 
 }
 
@@ -559,12 +560,13 @@ void Game::manageVAO()
 	dequeueVAO_mutex.lock();
 	while (!dequeueVAO.empty())
 	{
+		std::cout << "dequeueVAO size: " << dequeueVAO.size() << std::endl;
 		i++;
 		info_VAO *info = dequeueVAO.front();
 		dequeueVAO.pop_front();
 
 		t_vertexData dataStruct = {(u_char*)(info->vertices.data), info->vertices.size};
-		VertexArrayObject *VAO = new VertexArrayObject(new VertexBufferObject(dataStruct), new ElementBufferObject(*(info->indices)), shaderHandler->GetShader("RLE-Geometry"));
+		VertexArrayObject *VAO = new VertexArrayObject(new VertexBufferObject(dataStruct), new ElementBufferObject(*(info->indices)), shaderHandler->GetShader("default"));
 		
 		u_int VAO_id = vertexArrayObjectHandler->AddVAO(VAO);
 
