@@ -49,73 +49,6 @@ Game::Game()
 													casse_block,
 													displayDistance);
 
-
-	// ecs = new ECS(chunkInstanciator->getTabChunks(), chunkInstanciator->getTabChunks_mutex(),
-	// 				cameraPosition, playerPos_mutex,
-	// 				endThreads, endThreads_mutex,
-	// 				&entityPos, entityPos_mutex);
-
-
-
-	// for (int i = 0; i < amount; i++)
-	// 	ecs->addEntity(cameraPosition.x + std::rand() % 500 - 250,cameraPosition.z + std::rand() % 500 - 250, 250 + std::rand() % 20);
-	
-	// modelMatrices.resize(amount);
-
-
-	// mesh *mesh42 = new mesh("object3d/cube.obj");
-
-	// t_vertexData dataStruct = {(u_char*)(mesh42->vertexes.data()), mesh42->vertexes.size() * (sizeof(glm::vec3) + 4 * sizeof(glm::vec4))};
-
-	// std::vector<unsigned int>* indices = new std::vector<unsigned int>();
-	// for (std::size_t i = 0; i < mesh42->triangles.size(); i++)
-	// {
-	// 	indices->push_back(mesh42->triangles[i].v[0]);
-	// 	indices->push_back(mesh42->triangles[i].v[1]);
-	// 	indices->push_back(mesh42->triangles[i].v[2]);
-	// }
-
-	// model_VAO = new VertexArrayObject(new VertexBufferObject(dataStruct), new ElementBufferObject(*indices), shaderHandler->GetShader("entity"));
-	// modelMatrices;
-	// entityPos_mutex.lock();
-    // for (unsigned int i = 0; i < amount; i++)
-    // {
-    //     glm::mat4 model = glm::mat4(1.0f);
-	// 	model = glm::translate(model, glm::vec3(0, 0, 0));
-	// 	modelMatrices[i] = model;
-    // }
-	
-
-	// oldPos = new glm::vec3[amount];
-	// memcpy(oldPos, entityPos->data(), amount * sizeof(glm::vec3));
-
-	// entityPos_mutex.unlock();
-
-    // configure instanced array
-	
-    // buffer;
-    // glGenBuffers(1, &buffer);
-    // glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    // glBufferData(GL_ARRAY_BUFFER, amount * sizeof(glm::mat4), &modelMatrices[0], GL_STATIC_DRAW);
-	// unsigned int VAO = model_VAO->GetVAO();
-	// glBindVertexArray(VAO);
-
-	// glEnableVertexAttribArray(1);
-	// glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)0);
-	// glEnableVertexAttribArray(2);
-	// glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(sizeof(glm::vec4)));
-	// glEnableVertexAttribArray(3);
-	// glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(2 * sizeof(glm::vec4)));
-	// glEnableVertexAttribArray(4);
-	// glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(3 * sizeof(glm::vec4)));
-
-	// glVertexAttribDivisor(1, 1);
-	// glVertexAttribDivisor(2, 1);
-	// glVertexAttribDivisor(3, 1);
-	// glVertexAttribDivisor(4, 1);
-
-	// glBindVertexArray(0);
-
 	IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -236,14 +169,9 @@ Game::Game()
 	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 0, &work_grp_size[0]);
 	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 1, &work_grp_size[1]);
 	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 2, &work_grp_size[2]);
-	// std::cout << "Max work group sizes" <<
-	// 	" x:" << work_grp_size[0] <<
-	// 	" y:" << work_grp_size[1] <<
-	// 	" z:" << work_grp_size[2] << "\n";
 
 	int work_grp_inv;
 	glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &work_grp_inv);
-	// std::cout << "Max invocations count per work group: " << work_grp_inv << "\n";
 	
 }
 
@@ -280,75 +208,12 @@ void Game::StartLoop() {
 	endThreads_mutex.lock();
 	endThreads = true;
 	endThreads_mutex.unlock();
-	// playerHasMoved_mutex.lock();
-	// playerHasMoved = true;
-	// playerHasMoved_mutex.unlock();
 	
 	std::cout << "Joining threads..." << std::endl;
 	chunkThread.join();
-	// std::cout << "Chunk thread joined." << std::endl;
-	// ecsThread.join();
 }
 
-void Game::manageUI()
-{
-	/*
-		Render distance
-		Seed
-		Speed
-		Number of Entities
-		Chunk Type
-		
-	
-	
-	*/
-	ImGui::Begin("This is nice UI", nullptr, ImGuiWindowFlags_AlwaysAutoResize);;
 
-	ImGui::Text("FPS: %d", fpsCounter);
-	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", cameraPosition.x, cameraPosition.y, cameraPosition.z);
-	ImGui::Text("Seed: %ld", chunkInstanciator->getCurrentSeed());
-	ImGui::Text("Entities: %d", amount);
-
-	if (ImGui::CollapsingHeader("Actions"))
-	{
-		if (ImGui::Button("Unload all chunks"))
-			chunkInstanciator->unloadAllChunks();
-		
-		
-		
-		ImGui::DragScalar("Seed", ImGuiDataType_S64, &seedUI, 0.1f);
-		ImGui::Checkbox("Instant update seed", &instantChange);
-		if (instantChange || ImGui::Button("Change seed"))
-		{
-			chunkInstanciator->changeSeed(seedUI);
-		}
-
-		ImGui::DragInt("Render distance", &renderDistance, 0.1f, 1, 100);
-		if (ImGui::Button("Change render distance"))
-		{
-			// currentDisplayDistance = 0.f;
-			chunkInstanciator->changeRenderDistance(renderDistance);
-		}
-		
-		
-		if (ImGui::Button("Switch cursors mode"))
-		window->switchCursorMode();
-	}
-
-	
-	ImGui::Text("Toogle free mouse: Press left.ALT");
-	if (ImGui::CollapsingHeader("Inputs"))
-	{
-		ImGui::Text("WASD: Move");
-		ImGui::Text("Space: Go up");
-		ImGui::Text("Left Control: Go down");
-		ImGui::Text("Left Shift: Sprint");
-		ImGui::Text("Left ALT: Toggle free mouse");
-	}
-
-
-	ImGui::End();
-}
 
 void Game::drawUI()
 {
@@ -430,9 +295,8 @@ void Game::Loop() {
 	currentDisplayDistance += (float)renderDistance/360.f * 16;
 	
 	// int startFog = currentDisplayDistance;
-	int startFog = currentDisplayDistance * 1000;
+	int startFog = currentDisplayDistance * 1000; // this is because the compute shader is SHIT
 	sizeFog = renderDistance * AChunk::sizeX; //this is bad
-	
 	
 	
 
@@ -476,6 +340,7 @@ void Game::drawEntity()
 	glBindVertexArray(0);
 }
 
+//CLANKER CODE
 void interpolatePositions(const glm::vec3* oldPos, 
 	const glm::vec3* newPos, 
 	std::vector<glm::vec3>& interpolatedPos, 
@@ -677,4 +542,64 @@ void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
 						
 
 
+}
+
+void Game::manageUI()
+{
+	/*
+		Render distance
+		Seed
+		Speed
+		Number of Entities
+		Chunk Type
+		
+	
+	
+	*/
+	ImGui::Begin("This is nice UI", nullptr, ImGuiWindowFlags_AlwaysAutoResize);;
+
+	ImGui::Text("FPS: %d", fpsCounter);
+	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", cameraPosition.x, cameraPosition.y, cameraPosition.z);
+	ImGui::Text("Seed: %ld", chunkInstanciator->getCurrentSeed());
+	ImGui::Text("Entities: %d", amount);
+
+	if (ImGui::CollapsingHeader("Actions"))
+	{
+		if (ImGui::Button("Unload all chunks"))
+			chunkInstanciator->unloadAllChunks();
+		
+		
+		
+		ImGui::DragScalar("Seed", ImGuiDataType_S64, &seedUI, 0.1f);
+		ImGui::Checkbox("Instant update seed", &instantChange);
+		if (instantChange || ImGui::Button("Change seed"))
+		{
+			chunkInstanciator->changeSeed(seedUI);
+		}
+
+		ImGui::DragInt("Render distance", &renderDistance, 0.1f, 1, 100);
+		if (ImGui::Button("Change render distance"))
+		{
+			// currentDisplayDistance = 0.f;
+			chunkInstanciator->changeRenderDistance(renderDistance);
+		}
+		
+		
+		if (ImGui::Button("Switch cursors mode"))
+		window->switchCursorMode();
+	}
+
+	
+	ImGui::Text("Toogle free mouse: Press left.ALT");
+	if (ImGui::CollapsingHeader("Inputs"))
+	{
+		ImGui::Text("WASD: Move");
+		ImGui::Text("Space: Go up");
+		ImGui::Text("Left Control: Go down");
+		ImGui::Text("Left Shift: Sprint");
+		ImGui::Text("Left ALT: Toggle free mouse");
+	}
+
+
+	ImGui::End();
 }

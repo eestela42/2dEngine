@@ -22,7 +22,6 @@ void Chunk2D::deleter()
 
 void Chunk2D::privGenerate(u_char *data)
 {
-	std::cout << "privGenerate called" << std::endl;
 	for (int x = 0; x < AChunk::sizeX; x++)
 	{
 		for (int y = 0; y < AChunk::sizeY; y++)
@@ -35,7 +34,6 @@ void Chunk2D::privGenerate(u_char *data)
 
 void Chunk2D::privCompile()
 {
-	std::cout << "privCompile called" << std::endl;
 	u_char *blocks = getData();
 	glm::ivec2 pos = getPos();
 	int offset_x = pos.x * AChunk::sizeX;
@@ -63,7 +61,6 @@ bool Chunk2D::privChangeBlock(int x, int y, int z, u_char type)
 
 t_vbo_data 					Chunk2D::privGetPtrVertices()
 {
-	std::cout << "privGetPtrVertices called" << std::endl;
 	t_vbo_data data;
 	data.data = vertices.data();
 	data.size = vertices.size() * sizeof(Vertex);
