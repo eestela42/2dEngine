@@ -285,7 +285,6 @@ void Game::manageVAO()
 
 		if (operation.type == vao_operation::Type::Remove)
 		{
-			std::cout << "Removing VAO at position: (" << pos.first << ", " << pos.second << ")" << std::endl;
 			if (existing != pos_to_vao.end())
 			{
 				vertexArrayObjectHandler->RemoveVAO(existing->second.VAO);
