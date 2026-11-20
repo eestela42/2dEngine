@@ -68,12 +68,20 @@ Game::Game()
 	seedUI = chunkInstanciator->getCurrentSeed();
 
 	tmpSetupComputeShader();
+
 	
-	
+	model_mesh = new mesh("object3d/42.obj");
+	model_VAO = new VertexArrayObject(
+		new VertexBufferObject(model_mesh->dataStruct),
+		new ElementBufferObject(model_mesh->shapeAssemblyData),
+		shaderHandler->GetShader("model"));
+
 }
 
 Game::~Game() {
 	std::cout << "start game destructor" << std::endl;
+	delete model_VAO;
+	delete model_mesh;
 	delete window;
 	delete inputHandler;
 	delete shaderHandler;
@@ -130,6 +138,30 @@ void Game::Loop() {
 
 	
 	inputHandler->HandleInput();
+	const glm::vec3 direction = glm::normalize(cameraDirection);
+	const float zoomDistance = static_cast<float>(inputHandler->ConsumeScrollOffset()) * 2.0f;
+	if (zoomDistance != 0.0f)
+	{
+		float adjustedZoomDistance = zoomDistance;
+		if (zoomDistance > 0.0f && direction.y < -0.001f)
+		{
+			const float distanceToGround = -cameraPosition.y / direction.y;
+			if (distanceToGround >= 0.0f)
+				adjustedZoomDistance = std::min(zoomDistance, std::max(0.0f, distanceToGround - 0.1f));
+		}
+		cameraPosition += direction * adjustedZoomDistance;
+	}
+
+	if (direction.y < -0.001f)
+	{
+		const float distance = -cameraPosition.y / direction.y;
+		if (distance > 0.0f)
+		{
+			modelPosition = cameraPosition + direction * distance;
+			modelPosition.y = 0.0f;
+		}
+	}
+
 	glm::mat4 view = glm::lookAt(cameraPosition, cameraPosition + cameraDirection, cameraUp);
 	glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)DEFAULT_WINDOW_WIDTH/(float)DEFAULT_WINDOW_HEIGHT, 0.1f, 16000.0f);
 	glm::mat4 matrix = glm::mat4(1.0f);
@@ -166,6 +198,32 @@ void Game::Loop() {
 
 	manageVAO();
 	draw();
+
+	shaderHandler->Use("model");
+	if (Shader::GetActiveShader()) {
+		glm::mat4 meshTransform(1.0f);
+		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+		meshTransform = glm::scale(meshTransform, glm::vec3(modelScale));
+
+		float lowestY = 0.0f;
+		if (!model_mesh->vertexes.empty())
+		{
+			lowestY = (meshTransform * glm::vec4(model_mesh->vertexes.front(), 1.0f)).y;
+			for (const glm::vec3& vertex : model_mesh->vertexes)
+				lowestY = std::min(lowestY, (meshTransform * glm::vec4(vertex, 1.0f)).y);
+		}
+
+		glm::mat4 model = glm::translate(glm::mat4(1.0f),
+			glm::vec3(modelPosition.x, modelPosition.y - lowestY, modelPosition.z)) * meshTransform;
+		Shader::GetActiveShader()->Setmat4("model", model);
+		Shader::GetActiveShader()->Setmat4("view", view);
+		Shader::GetActiveShader()->Setmat4("proj", proj);
+	}
+	model_VAO->Bind();
+	glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(model_VAO->GetIndicesSize()), GL_UNSIGNED_INT, nullptr);
+	model_VAO->Unbind();
 
 
 	shaderHandler->Use("entity");
@@ -464,11 +522,18 @@ void Game::manageUI()
 		window->switchCursorMode();
 	}
 
+	if (ImGui::CollapsingHeader("Mesh"))
+	{
+		ImGui::DragFloat("Scale", &modelScale, 0.05f, 0.1f, 20.0f);
+		ImGui::DragFloat3("Rotation (degrees)", glm::value_ptr(modelRotation), 1.0f, -360.0f, 360.0f);
+	}
+
 	
 	ImGui::Text("Toogle free mouse: Press left.ALT");
 	if (ImGui::CollapsingHeader("Inputs"))
 	{
 		ImGui::Text("WASD: Move parallel to ground");
+		ImGui::Text("Mouse wheel: Zoom along camera axis");
 		ImGui::Text("Space: Go up");
 		ImGui::Text("Left Shift: Go down");
 		ImGui::Text("Left Control: Sprint");

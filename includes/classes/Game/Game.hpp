@@ -29,6 +29,8 @@
 
 #include <thread>
 
+#include <classes/Game/mesh.hpp>
+
 
 struct DrawInfo
 {
@@ -104,6 +106,11 @@ private :
 
 	void tmpSetupComputeShader();
 	void tmpuseComputeShader();
+
+	mesh *model_mesh;
+	glm::vec3 modelPosition = glm::vec3(0.0f);
+	glm::vec3 modelRotation = glm::vec3(0.0f, 90.0f, 0.0f);
+	float modelScale = 0.85f;
 
 
 	std::mutex 					playerHasMoved_mutex;

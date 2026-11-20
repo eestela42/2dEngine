@@ -27,7 +27,7 @@ mesh::mesh(std::string file_name)
 	std::cout << "--start managing raw info from file" << std::endl;
 
 	EcoDupVertex();
-	// center_around_orgin();
+	center_around_orgin();
 
 	std::cout << "--end managing raw info from file" << std::endl;
 

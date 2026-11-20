@@ -21,14 +21,17 @@ class InputHandler
 
         void AddCallback(I_Input*);
 		void HandleInput();
+		double ConsumeScrollOffset();
     private:
         std::vector<I_Input*> callbackVector;
         GLFWwindow *window;
         int keyMap[GLFW_KEY_LAST + 1] = {0};
 		u_char keyState[KEY_LAST + 1] = {0};
 		double posX, posY;
+		double scrollOffset = 0.0;
 
         void MapKeys();
+		static void ScrollCallback(GLFWwindow *window, double xOffset, double yOffset);
 };
 
 #endif

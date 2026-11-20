@@ -3,6 +3,8 @@
 InputHandler::InputHandler(GLFWwindow *window) : window(window) {
     MapKeys();
     glfwGetCursorPos(window, &posX, &posY);
+	glfwSetWindowUserPointer(window, this);
+	glfwSetScrollCallback(window, ScrollCallback);
 }
 
 void InputHandler::AddCallback(I_Input *newCallback) {
@@ -41,6 +43,20 @@ void InputHandler::HandleInput()
 
 
     }
+}
+
+double InputHandler::ConsumeScrollOffset()
+{
+	double offset = scrollOffset;
+	scrollOffset = 0.0;
+	return offset;
+}
+
+void InputHandler::ScrollCallback(GLFWwindow *window, __attribute__((unused)) double xOffset, double yOffset)
+{
+	InputHandler *handler = static_cast<InputHandler*>(glfwGetWindowUserPointer(window));
+	if (handler)
+		handler->scrollOffset += yOffset;
 }
 
 void InputHandler::MapKeys() {
