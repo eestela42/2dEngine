@@ -8,7 +8,7 @@
 #define KEY_MOVE_BACKWARD		2
 #define KEY_MOVE_RIGHTWARD		3
 #define KEY_MOVE_LEFTWARD		4
-#define KEY_MOVE_UPWARD			5
+#define KEY_SPRINT				5
 #define KEY_MOVE_DOWNWARD		6
 
 #define KEY_ENTER				7

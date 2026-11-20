@@ -10,6 +10,14 @@ struct Vertex
 	int 		light;
 };
 
+struct Vertex_texture
+{
+    glm::vec3   Position;
+	int 		light;
+	glm::vec2	texCoord;
+	int 		blockType;
+};
+
 struct t_vbo_data
 {
 	void *data = NULL;

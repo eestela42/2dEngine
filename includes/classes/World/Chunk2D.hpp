@@ -4,7 +4,7 @@
 
 class Chunk2D : public AChunk {
 	private:
-		std::vector<Vertex> 		vertices;
+		std::vector<Vertex_texture>	vertices;
 		std::vector<unsigned int> 	indices;
 		std::vector<u_char> map;
 
@@ -29,6 +29,6 @@ class Chunk2D : public AChunk {
 
 
 
-		void	createFace(int x, int y, int z, int tab_x, int tab_y, int tab_z, int dir);
+		void	createFace(int x, int y, int z, int tab_x, int tab_y, int tab_z, int block_type, int dir);
 
 };

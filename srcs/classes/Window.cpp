@@ -37,7 +37,7 @@ Window::Window(const char *name, DrawMode drawMode) {
         assert(!"Window::Window gladLoadGLLoader failed");
     }
 
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // Tell OpenGL that we want to capture and hide the cursor
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     
 	glEnable(GL_DEPTH_TEST);
     glViewport(0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT); // Tell OpenGL the size of the drawing window

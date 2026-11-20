@@ -87,12 +87,12 @@ private :
 	const float sensitivity = 0.05f;
 
 	float yaw = -90;
-	float pitch = 0;
+	float pitch = -75.0f;
 
 	std::mutex playerPos_mutex;
 
 	glm::vec3 const cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
-	glm::vec3 cameraPosition = glm::vec3(0, 200, 0);
+	glm::vec3 cameraPosition = glm::vec3(0, 50, 0);
 	glm::vec3 cameraDirection = glm::vec3(	cos(glm::radians(yaw)) * cos(glm::radians(pitch)),
 											sin(glm::radians(pitch)),
 											sin(glm::radians(yaw)) * cos(glm::radians(pitch)));

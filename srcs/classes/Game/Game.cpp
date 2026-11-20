@@ -152,13 +152,16 @@ void Game::Loop() {
     }
 
 	// shaderHandler->Use("RLE-Regular");
-	shaderHandler->Use("default");
+	shaderHandler->Use("default_texture");
 	if (Shader::GetActiveShader()) {
 		Shader::GetActiveShader()->SetFloat4("cameraPos", cameraPosition.x, cameraPosition.y, cameraPosition.z, 0);
 		Shader::GetActiveShader()->Setmat4("matrix", matrix);
 		Shader::GetActiveShader()->SetInt("chunk_size_x", AChunk::sizeX);
 		Shader::GetActiveShader()->SetInt("chunk_size_y", AChunk::sizeY);
 		Shader::GetActiveShader()->SetInt("TextureArraySize", 6);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D_ARRAY, blockTextureArray.id);
+		Shader::GetActiveShader()->SetInt("ourTextureArray", 0);
 	}
 
 	manageVAO();
@@ -282,6 +285,7 @@ void Game::manageVAO()
 
 		if (operation.type == vao_operation::Type::Remove)
 		{
+			std::cout << "Removing VAO at position: (" << pos.first << ", " << pos.second << ")" << std::endl;
 			if (existing != pos_to_vao.end())
 			{
 				vertexArrayObjectHandler->RemoveVAO(existing->second.VAO);
@@ -301,7 +305,7 @@ void Game::manageVAO()
 		t_vertexData dataStruct = {operation.info->vertices.data(), operation.info->vertices.size()};
 		VertexArrayObject *VAO = new VertexArrayObject(new VertexBufferObject(dataStruct),
 														new ElementBufferObject(operation.info->indices),
-														shaderHandler->GetShader("default"));
+														shaderHandler->GetShader("default_texture"));
 		u_int VAO_id = vertexArrayObjectHandler->AddVAO(VAO);
 		pos_to_vao.insert({pos, {VAO_id}});
 		delete operation.info;
@@ -314,33 +318,42 @@ void Game::manageVAO()
 bool Gogogo = false;
 
 void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
-	float speedMultiplier = (keyState[KEY_MOVE_UPWARD] & KEY_HOLD) ? 20 : 1;
+	float speedMultiplier = (keyState[KEY_SPRINT] & KEY_HOLD) ? 20 : 1;
 	glm::vec3 oldCamPos = cameraPosition;
 
 	playerPos_mutex.lock();
+	glm::vec3 horizontalForward(cameraDirection.x, 0.0f, cameraDirection.z);
+	if (glm::length(horizontalForward) > 0.0001f)
+		horizontalForward = glm::normalize(horizontalForward);
+	else
+		horizontalForward = glm::normalize(glm::vec3(
+			cos(glm::radians(yaw)), 0.0f, sin(glm::radians(yaw))));
+	glm::vec3 horizontalRight = glm::normalize(glm::cross(horizontalForward, cameraUp));
+	glm::vec3 horizontalMovement(0.0f);
+
 	if(keyState[KEY_MOVE_FORWARD] & KEY_HOLD)
-  		cameraPosition += speed * speedMultiplier * cameraDirection;
+		horizontalMovement += horizontalForward;
 	if(keyState[KEY_MOVE_BACKWARD] & KEY_HOLD)
-			cameraPosition -= speed * speedMultiplier * cameraDirection;
+		horizontalMovement -= horizontalForward;
 	if(keyState[KEY_MOVE_RIGHTWARD] & KEY_HOLD)
-			cameraPosition += speed * speedMultiplier * glm::normalize(glm::cross(cameraDirection, cameraUp));
+		horizontalMovement += horizontalRight;
 	if(keyState[KEY_MOVE_LEFTWARD] & KEY_HOLD)
-	{
-			cameraPosition -= speed * speedMultiplier * glm::normalize(glm::cross(cameraDirection, cameraUp));
-	}
+		horizontalMovement -= horizontalRight;
+
+	if (glm::length(horizontalMovement) > 1.0f)
+		horizontalMovement = glm::normalize(horizontalMovement);
+	cameraPosition += speed * speedMultiplier * horizontalMovement;
+
 	if(keyState[KEY_SPACE] & KEY_HOLD)
-			cameraPosition += glm::vec3(0, speed * speedMultiplier, 0);
+		cameraPosition += cameraUp * speed * speedMultiplier;
 	if(keyState[KEY_MOVE_DOWNWARD] & KEY_HOLD)
-			cameraPosition += glm::vec3(0, -speed * speedMultiplier, 0);
-	
+		cameraPosition -= cameraUp * speed * speedMultiplier;
 
 	if (keyState[KEY_DELETE_ONE_BLOCK] & KEY_PRESS)
 		Gogogo = !Gogogo;
 	if (Gogogo)
 	{
-		glm::vec3 flatDrirection = cameraDirection;
-		flatDrirection.y = 0;
-		cameraPosition += 2 * speed * speedMultiplier * flatDrirection;
+		cameraPosition += 2 * speed * speedMultiplier * horizontalForward;
 		mouseMoveX += 0.5;
 	}
 	if (keyState[KEY_SWITCH_CURSOR_MODE] & KEY_PRESS)
@@ -348,7 +361,6 @@ void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
 		window->switchCursorMode();
 	}
 
-	
 	playerPos_mutex.unlock();
 	if (oldCamPos.x / AChunk::sizeX != cameraPosition.x / AChunk::sizeX || oldCamPos.z / AChunk::sizeY != cameraPosition.z / AChunk::sizeY)
 	{
@@ -457,10 +469,10 @@ void Game::manageUI()
 	ImGui::Text("Toogle free mouse: Press left.ALT");
 	if (ImGui::CollapsingHeader("Inputs"))
 	{
-		ImGui::Text("WASD: Move");
+		ImGui::Text("WASD: Move parallel to ground");
 		ImGui::Text("Space: Go up");
-		ImGui::Text("Left Control: Go down");
-		ImGui::Text("Left Shift: Sprint");
+		ImGui::Text("Left Shift: Go down");
+		ImGui::Text("Left Control: Sprint");
 		ImGui::Text("Left ALT: Toggle free mouse");
 	}
 
