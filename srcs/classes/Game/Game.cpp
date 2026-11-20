@@ -67,111 +67,8 @@ Game::Game()
 
 	seedUI = chunkInstanciator->getCurrentSeed();
 
-
-	// configure compute shader
-
-    glGenFramebuffers(1, &frontGroundFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, frontGroundFBO);
-
-    glGenTextures(1, &frontColorTexture);
-    glBindTexture(GL_TEXTURE_2D, frontColorTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frontColorTexture, 0);
-
-    glGenTextures(1, &frontDepthTexture);
-    glBindTexture(GL_TEXTURE_2D, frontDepthTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,  DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, frontDepthTexture, 0);
-
-    GLenum drawBuffers[] = { GL_COLOR_ATTACHMENT0 };
-    glDrawBuffers(1, drawBuffers);
-
-    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-  
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    // Setup backgroundFBO (backColorTexture, backDepthTexture)
-    glGenFramebuffers(1, &backgroundFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, backgroundFBO);
-
-    glGenTextures(1, &backColorTexture);
-    glBindTexture(GL_TEXTURE_2D, backColorTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F,  DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, backColorTexture, 0);
-
-    glGenTextures(1, &backDepthTexture);
-    glBindTexture(GL_TEXTURE_2D, backDepthTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,  DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, backDepthTexture, 0);
-
-    glDrawBuffers(1, drawBuffers);
-
-    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        std::cerr << "backgroundFBO incomplete: " << status << std::endl;
-    } else {
-        std::cout << "backgroundFBO complete!" << std::endl;
-    }
-
-	glGenFramebuffers(1, &outFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, outFBO);
-
-    glGenTextures(1, &outTexture);
-    glBindTexture(GL_TEXTURE_2D, outTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F,  DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, outTexture, 0);
-
-
-    glDrawBuffers(1, drawBuffers);
-
-    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        std::cerr << "outFBO incomplete: " << status << std::endl;
-    } else {
-        std::cout << "outFBO complete!" << std::endl;
-    }
-
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-
-	shaderHandler->Use("compute");
-	int work_grp_cnt[3];
-	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &work_grp_cnt[0]);
-	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 1, &work_grp_cnt[1]);
-	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, &work_grp_cnt[2]);
-
-
-	int work_grp_size[3];
-	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 0, &work_grp_size[0]);
-	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 1, &work_grp_size[1]);
-	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 2, &work_grp_size[2]);
-
-	int work_grp_inv;
-	glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &work_grp_inv);
+	tmpSetupComputeShader();
+	
 	
 }
 
@@ -221,9 +118,6 @@ void Game::drawUI()
 }
 
 void Game::Loop() {
-	window->Clear();
-
-	
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
@@ -241,25 +135,21 @@ void Game::Loop() {
 	glm::mat4 matrix = glm::mat4(1.0f);
 	matrix = proj * view;
 	
-	glBindFramebuffer(GL_FRAMEBUFFER, backgroundFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, frontGroundFBO);
     glViewport(0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
+	glDepthMask(GL_TRUE);
+	glClearDepth(1.0);
+	window->Clear();
+
+	glDepthFunc(GL_LEQUAL);
 	skyBox->drawSkybox(view, proj, cameraPosition);
+	glDepthFunc(GL_LESS);
 
 	GLenum err;
     while ((err = glGetError()) != GL_NO_ERROR) {
         std::cerr << "OpenGL error: " << err << std::endl;
     }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, frontGroundFBO);
-    glViewport(0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glDepthFunc(GL_LESS);
-	
-	
 
 	// shaderHandler->Use("RLE-Regular");
 	shaderHandler->Use("default");
@@ -286,38 +176,12 @@ void Game::Loop() {
 	// manageVaoEntity();
 	// drawEntity();
 
-	glBindFramebuffer(GL_FRAMEBUFFER, outFBO);
-    glViewport(0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//tmpuseComputeShader();
 
-	
-	currentDisplayDistance += (float)renderDistance/360.f * 16;
-	
-	// int startFog = currentDisplayDistance;
-	int startFog = currentDisplayDistance * 1000; // this is because the compute shader is SHIT
-	sizeFog = renderDistance * AChunk::sizeX; //this is bad
-	
-	
-
-	
-	shaderHandler->Use("compute");
-	if (Shader::GetActiveShader())
-	{
-		Shader::GetActiveShader()->SetTexture("frontTex", frontColorTexture, GL_TEXTURE0);
-		Shader::GetActiveShader()->SetTexture("depthTex", frontDepthTexture, GL_TEXTURE1);
-		Shader::GetActiveShader()->SetTexture("backTex", backColorTexture, GL_TEXTURE2);
-		Shader::GetActiveShader()->SetInt("startFog", startFog);
-		Shader::GetActiveShader()->SetInt("endFog", startFog + sizeFog);
-	}
-
-	glBindImageTexture(0, outTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
-	glDispatchCompute((DEFAULT_WINDOW_WIDTH + 15) / 16, (DEFAULT_WINDOW_HEIGHT + 15) / 16, 1);
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, outFBO);
-	// glBindFramebuffer(GL_READ_FRAMEBUFFER, frontGroundFBO);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, frontGroundFBO);
+	glReadBuffer(GL_COLOR_ATTACHMENT0);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glDrawBuffer(GL_BACK);
 	glBlitFramebuffer(0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -602,4 +466,150 @@ void Game::manageUI()
 
 
 	ImGui::End();
+}
+
+
+void Game::tmpSetupComputeShader()
+{
+	// configure compute shader
+
+    glGenFramebuffers(1, &frontGroundFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, frontGroundFBO);
+
+    glGenTextures(1, &frontColorTexture);
+    glBindTexture(GL_TEXTURE_2D, frontColorTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frontColorTexture, 0);
+
+    glGenTextures(1, &frontDepthTexture);
+    glBindTexture(GL_TEXTURE_2D, frontDepthTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,  DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, frontDepthTexture, 0);
+
+    GLenum drawBuffers[] = { GL_COLOR_ATTACHMENT0 };
+    glDrawBuffers(1, drawBuffers);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+  
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // Setup backgroundFBO (backColorTexture, backDepthTexture)
+    glGenFramebuffers(1, &backgroundFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, backgroundFBO);
+
+    glGenTextures(1, &backColorTexture);
+    glBindTexture(GL_TEXTURE_2D, backColorTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F,  DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, backColorTexture, 0);
+
+    glGenTextures(1, &backDepthTexture);
+    glBindTexture(GL_TEXTURE_2D, backDepthTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,  DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, backDepthTexture, 0);
+
+    glDrawBuffers(1, drawBuffers);
+
+    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "backgroundFBO incomplete: " << status << std::endl;
+    } else {
+        std::cout << "backgroundFBO complete!" << std::endl;
+    }
+
+	glGenFramebuffers(1, &outFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, outFBO);
+
+    glGenTextures(1, &outTexture);
+    glBindTexture(GL_TEXTURE_2D, outTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F,  DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, outTexture, 0);
+
+
+    glDrawBuffers(1, drawBuffers);
+
+    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "outFBO incomplete: " << status << std::endl;
+    } else {
+        std::cout << "outFBO complete!" << std::endl;
+    }
+
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+	shaderHandler->Use("compute");
+	int work_grp_cnt[3];
+	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &work_grp_cnt[0]);
+	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 1, &work_grp_cnt[1]);
+	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, &work_grp_cnt[2]);
+
+
+	int work_grp_size[3];
+	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 0, &work_grp_size[0]);
+	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 1, &work_grp_size[1]);
+	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 2, &work_grp_size[2]);
+
+	int work_grp_inv;
+	glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &work_grp_inv);
+}
+
+
+void Game::tmpuseComputeShader()
+{
+	
+	glBindFramebuffer(GL_FRAMEBUFFER, outFBO);
+    glViewport(0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	
+	currentDisplayDistance += (float)renderDistance/360.f * 16;
+	
+	// int startFog = currentDisplayDistance;
+	int startFog = currentDisplayDistance * 1000; // this is because the compute shader is SHIT
+	sizeFog = renderDistance * AChunk::sizeX; //this is bad
+	
+	
+
+	
+	shaderHandler->Use("compute");
+	if (Shader::GetActiveShader())
+	{
+		Shader::GetActiveShader()->SetTexture("frontTex", frontColorTexture, GL_TEXTURE0);
+		Shader::GetActiveShader()->SetTexture("depthTex", frontDepthTexture, GL_TEXTURE1);
+		Shader::GetActiveShader()->SetTexture("backTex", backColorTexture, GL_TEXTURE2);
+		Shader::GetActiveShader()->SetInt("startFog", startFog);
+		Shader::GetActiveShader()->SetInt("endFog", startFog + sizeFog);
+	}
+
+	glBindImageTexture(0, outTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glDispatchCompute((DEFAULT_WINDOW_WIDTH + 15) / 16, (DEFAULT_WINDOW_HEIGHT + 15) / 16, 1);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, outFBO);
+	// glBindFramebuffer(GL_READ_FRAMEBUFFER, frontGroundFBO);
 }

@@ -102,7 +102,8 @@ private :
 									glm::vec3(0, 1, 0));
 
 
-	
+	void tmpSetupComputeShader();
+	void tmpuseComputeShader();
 
 
 	std::mutex 					playerHasMoved_mutex;
