@@ -83,7 +83,7 @@ private :
 
 	//player
 
-	const float speed = 0.35f;
+	const float speed = 0.15f;
 	const float sensitivity = 0.05f;
 
 	float yaw = -90;

@@ -17,6 +17,7 @@ Window::Window(const char *name, DrawMode drawMode) {
         assert(!"Window::Window glfwInit failed");
     }
 
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);  //OpenGL version ->4.6
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);  //OpenGL version   4.6<-
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); //We use the core profile because we want to use the modulable part of OpenGL
@@ -50,6 +51,12 @@ Window::Window(const char *name, DrawMode drawMode) {
     }
     glfwSwapInterval(1);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback); // We tell glfw which function to call whenever window is resized
+
+	
+	std::cout << "Vendor:   " << glGetString(GL_VENDOR) << std::endl;
+	std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
+	std::cout << "Version:  " << glGetString(GL_VERSION) << std::endl;
+	std::cout << "GLSL:     " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 }
 
 int Window::ShouldContinue() {
