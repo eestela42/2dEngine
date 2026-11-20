@@ -1,17 +1,16 @@
 #include <classes/World/ChunkInstanciator.hpp>
+#include <cstring>
 
 ChunkInstanciator::ChunkInstanciator(u_int renderDistance,
 										glm::vec3 &playerPos,					std::mutex &playerPos_mutex,
-										std::deque<info_VAO*> &to_VAO, 			std::mutex &to_VAO_mutex,
-										std::deque<glm::ivec2> &toDeleteVAO, 	std::mutex &toDeleteVAO_mutex,
+										std::deque<vao_operation> &vaoOperations, std::mutex &vaoOperations_mutex,
 										bool &playerHasMoved, 					std::mutex &playerHasMoved_mutex,
 										bool &endThread, 						std::mutex &endThread_mutex,
 										bool& casse_block,
 										int &displayDistance)
 	: renderDistance(renderDistance),
 		realPlayerPos(playerPos), realPlayerPos_mutex(playerPos_mutex),
-		to_VAO(to_VAO), to_VAO_mutex(to_VAO_mutex),
-		toDeleteVAO(toDeleteVAO), toDeleteVAO_mutex(toDeleteVAO_mutex),
+		vaoOperations(vaoOperations), vaoOperations_mutex(vaoOperations_mutex),
 		playerHasMoved(playerHasMoved), playerHasMoved_mutex(playerHasMoved_mutex),
 		endThread(endThread), endThread_mutex(endThread_mutex),
 		casse_block(casse_block),
@@ -73,13 +72,16 @@ bool ChunkInstanciator::compileChunksWithNeighbours(AChunk *chunk, s_neighbours 
 	chunk->pubCompile();
 
 	info_VAO *info = new info_VAO();
-	*info = {chunk->pubGetPtrVertices(), chunk->pubGetPtrIndices(), chunk->getPos()};
+	t_vbo_data vertices = chunk->pubGetPtrVertices();
+	info->vertices.resize(vertices.size);
+	if (!info->vertices.empty())
+		std::memcpy(info->vertices.data(), vertices.data, vertices.size);
+	info->indices = *chunk->pubGetPtrIndices();
+	info->pos = chunk->getPos();
 
-	to_VAO_mutex.lock();
-
-	to_VAO.push_back(info);
-
-	to_VAO_mutex.unlock();
+	vaoOperations_mutex.lock();
+	vaoOperations.push_back({vao_operation::Type::Add, info, info->pos});
+	vaoOperations_mutex.unlock();
 
 
 	return true;
@@ -158,11 +160,10 @@ void ChunkInstanciator::deleteBadChunk(glm::ivec2 chunkTabPos)
 {
 	if (tabChunks[chunkTabPos.x][chunkTabPos.y]->getIsCompiled())
 	{
-		toDeleteVAO_mutex.lock();
-
-		toDeleteVAO.push_back(tabChunks[chunkTabPos.x][chunkTabPos.y]->getPos());
-
-		toDeleteVAO_mutex.unlock();
+		vaoOperations_mutex.lock();
+		vaoOperations.push_back({vao_operation::Type::Remove, NULL,
+								tabChunks[chunkTabPos.x][chunkTabPos.y]->getPos()});
+		vaoOperations_mutex.unlock();
 
 		tabChunks[chunkTabPos.x][chunkTabPos.y]->setIsCompiled(false);
 	}
@@ -211,15 +212,13 @@ void ChunkInstanciator::updateChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos,
 	AChunk *chunk = tabChunks[chunkTabPos.x][chunkTabPos.y];
 	if (!chunk) //npt supposed to happen curently
 		return ;
-	bool to_delete = (chunkPos.x - playerChunkPos.x > renderDistance || playerChunkPos.x - chunkPos.x < -renderDistance
-				|| chunkPos.y - playerChunkPos.y > renderDistance || playerChunkPos.y - chunkPos.y < -renderDistance);
+	bool to_delete = (chunkPos.x - playerChunkPos.x > renderDistance || chunkPos.x - playerChunkPos.x < -renderDistance
+				|| chunkPos.y - playerChunkPos.y > renderDistance || chunkPos.y - playerChunkPos.y < -renderDistance);
 	if (to_delete && chunk->getIsCompiled())
 	{
-		toDeleteVAO_mutex.lock();
-
-		toDeleteVAO.push_back(chunk->getPos());
-
-		toDeleteVAO_mutex.unlock();
+		vaoOperations_mutex.lock();
+		vaoOperations.push_back({vao_operation::Type::Remove, NULL, chunk->getPos()});
+		vaoOperations_mutex.unlock();
 
 		chunk->setIsCompiled(false);
 	}
@@ -231,11 +230,9 @@ void ChunkInstanciator::updateChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos,
 	{
 		if (chunk->getIsCompiled())
 		{
-			toDeleteVAO_mutex.lock();
-
-			toDeleteVAO.push_back(chunk->getPos());
-
-			toDeleteVAO_mutex.unlock();
+			vaoOperations_mutex.lock();
+			vaoOperations.push_back({vao_operation::Type::Remove, NULL, chunk->getPos()});
+			vaoOperations_mutex.unlock();
 			chunk->setIsCompiled(false);
 		}
 
@@ -249,9 +246,6 @@ void ChunkInstanciator::updateChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos,
 
 
  
-int t_x = 0;
-int t_y = 0;
-int t_z = 1;
 void ChunkInstanciator::update()
 {
 	bool debug = true ;
@@ -274,7 +268,14 @@ void ChunkInstanciator::update()
 		glm::ivec2 zop = {0, 0};
 		resetGetNextPos();
 		_updateMutex.lock();
-		for (int x1 = 0 ; getKeepUpdating() && x1 <= generationDistance * generationDistance; x1++) {
+		const int slotsPerSweep = size_tab * size_tab;
+		for (int x1 = 0; getKeepUpdating() && x1 < slotsPerSweep; x1++) {
+			endThread_mutex.lock();
+			bool shouldStop = endThread;
+			endThread_mutex.unlock();
+			if (shouldStop)
+				break;
+				
 			playerHasMoved_mutex.lock();
 			if (playerHasMoved)
 			{
@@ -325,11 +326,17 @@ void ChunkInstanciator::update()
 void ChunkInstanciator::deleteAllChunks()
 {
 	displayDistance = 0;
-	to_VAO_mutex.lock();
-
-	to_VAO.clear();
-
-	to_VAO_mutex.unlock();
+	vaoOperations_mutex.lock();
+	std::deque<vao_operation> pendingRemovals;
+	for (const vao_operation &operation : vaoOperations)
+	{
+		if (operation.type == vao_operation::Type::Add)
+			delete operation.info;
+		else
+			pendingRemovals.push_back(operation);
+	}
+	vaoOperations.swap(pendingRemovals);
+	vaoOperations_mutex.unlock();
 
 	for (int i = 0; i < tabChunks.size(); i++)
 	{

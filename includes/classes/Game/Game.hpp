@@ -77,7 +77,7 @@ private :
 
 
 	//config
-	int renderDistance = 15;
+	int renderDistance = 16;
 
 	TextureArray blockTextureArray;
 
@@ -107,12 +107,8 @@ private :
 
 	std::mutex 					playerHasMoved_mutex;
 	bool 						playerHasMoved = false;
-
-	std::mutex					dequeueVAO_mutex;
-	std::deque<info_VAO*>		dequeueVAO;
-
-	std::mutex					dequeueDeleteVAO_mutex;
-	std::deque<glm::ivec2> 		dequeueDeleteVAO;
+	std::mutex						vaoOperations_mutex;
+	std::deque<vao_operation>		vaoOperations;
 
 	std::mutex					endThreads_mutex;
 	bool 						endThreads = false;

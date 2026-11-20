@@ -18,15 +18,26 @@ struct t_vbo_data
 
 struct info_VAO
 {
-	t_vbo_data					vertices;
-	std::vector<unsigned int>*	indices;
+	std::vector<unsigned char>	vertices;
+	std::vector<unsigned int>	indices;
 	glm::ivec2 					pos;
+};
+
+struct vao_operation
+{
+	enum class Type
+	{
+		Add,
+		Remove
+	};
+
+	Type		type;
+	info_VAO	*info;
+	glm::ivec2	pos;
 };
 
 struct VAO_data
 {
-	void*						vertices;
-	std::vector<unsigned int>*	indices;
 	u_int 						VAO;
 };
 

@@ -43,8 +43,7 @@ Game::Game()
 	skyBox = new SkyBox(shaderHandler->GetShader("cubemap"));
 
 	chunkInstanciator = new ChunkInstanciator(renderDistance, cameraPosition, playerPos_mutex,
-													dequeueVAO, dequeueVAO_mutex,
-													dequeueDeleteVAO, dequeueDeleteVAO_mutex,
+													vaoOperations, vaoOperations_mutex,
 													playerHasMoved, playerHasMoved_mutex,
 													endThreads, endThreads_mutex,
 													casse_block,
@@ -281,11 +280,10 @@ void Game::StartLoop() {
 	endThreads_mutex.lock();
 	endThreads = true;
 	endThreads_mutex.unlock();
+	// playerHasMoved_mutex.lock();
+	// playerHasMoved = true;
+	// playerHasMoved_mutex.unlock();
 	
-	playerHasMoved_mutex.lock();
-	playerHasMoved = true;
-	playerHasMoved_mutex.unlock();
-
 	std::cout << "Joining threads..." << std::endl;
 	chunkThread.join();
 	// std::cout << "Chunk thread joined." << std::endl;
@@ -431,7 +429,8 @@ void Game::Loop() {
 	
 	currentDisplayDistance += (float)renderDistance/360.f * 16;
 	
-	int startFog = currentDisplayDistance;
+	// int startFog = currentDisplayDistance;
+	int startFog = currentDisplayDistance * 1000;
 	sizeFog = renderDistance * AChunk::sizeX; //this is bad
 	
 	
@@ -540,40 +539,46 @@ void Game::manageVaoEntity()
 
 void Game::manageVAO()
 {
-	int i = 0;
+	std::deque<vao_operation> pendingOperations;
+	vaoOperations_mutex.lock();
+	pendingOperations.swap(vaoOperations);
+	vaoOperations_mutex.unlock();
 
-	i = 0;
-	dequeueDeleteVAO_mutex.lock();
-	while (!dequeueDeleteVAO.empty())
+	while (!pendingOperations.empty())
 	{
-		i++;
-		std::pair<int, int> pos = std::make_pair(dequeueDeleteVAO.front().x, dequeueDeleteVAO.front().y);
-		dequeueDeleteVAO.pop_front();
-		vertexArrayObjectHandler->RemoveVAO(pos_to_vao[pos].VAO);
-		pos_to_vao.erase(pos);
-	}
-	dequeueDeleteVAO_mutex.unlock();
+		vao_operation operation = pendingOperations.front();
+		pendingOperations.pop_front();
+		std::pair<int, int> pos = std::make_pair(operation.pos.x, operation.pos.y);
+		auto existing = pos_to_vao.find(pos);
 
-	vao_counter -= i;
+		if (operation.type == vao_operation::Type::Remove)
+		{
+			if (existing != pos_to_vao.end())
+			{
+				vertexArrayObjectHandler->RemoveVAO(existing->second.VAO);
+				pos_to_vao.erase(existing);
+				vao_counter--;
+			}
+			continue;
+		}
 
-	i = 0;
-	dequeueVAO_mutex.lock();
-	while (!dequeueVAO.empty())
-	{
-		std::cout << "dequeueVAO size: " << dequeueVAO.size() << std::endl;
-		i++;
-		info_VAO *info = dequeueVAO.front();
-		dequeueVAO.pop_front();
+		if (existing != pos_to_vao.end())
+		{
+			vertexArrayObjectHandler->RemoveVAO(existing->second.VAO);
+			pos_to_vao.erase(existing);
+			vao_counter--;
+		}
 
-		t_vertexData dataStruct = {(u_char*)(info->vertices.data), info->vertices.size};
-		VertexArrayObject *VAO = new VertexArrayObject(new VertexBufferObject(dataStruct), new ElementBufferObject(*(info->indices)), shaderHandler->GetShader("default"));
-		
+		t_vertexData dataStruct = {operation.info->vertices.data(), operation.info->vertices.size()};
+		VertexArrayObject *VAO = new VertexArrayObject(new VertexBufferObject(dataStruct),
+														new ElementBufferObject(operation.info->indices),
+														shaderHandler->GetShader("default"));
 		u_int VAO_id = vertexArrayObjectHandler->AddVAO(VAO);
-
-		pos_to_vao.insert({std::make_pair(info->pos.x, info->pos.y), {info->vertices.data, info->indices, VAO_id}});
+		pos_to_vao.insert({pos, {VAO_id}});
+		delete operation.info;
+		vao_counter++;
 	}
-	dequeueVAO_mutex.unlock();
-	vao_counter += i;
+	vaoOperations_mutex.unlock();
 }
 
 //for the stream, auto-move
@@ -581,7 +586,6 @@ bool Gogogo = false;
 
 void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
 	float speedMultiplier = (keyState[KEY_MOVE_UPWARD] & KEY_HOLD) ? 20 : 1;
-
 	glm::vec3 oldCamPos = cameraPosition;
 
 	playerPos_mutex.lock();
@@ -617,7 +621,6 @@ void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
 
 	
 	playerPos_mutex.unlock();
-	
 	if (oldCamPos.x / AChunk::sizeX != cameraPosition.x / AChunk::sizeX || oldCamPos.z / AChunk::sizeY != cameraPosition.z / AChunk::sizeY)
 	{
 		playerHasMoved_mutex.lock();
