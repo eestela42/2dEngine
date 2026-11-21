@@ -112,11 +112,32 @@ Game::Game()
 
 Game::~Game() {
 	std::cout << "start game destructor" << std::endl;
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+
+	if (blockTextureArray.id)
+		glDeleteTextures(1, &blockTextureArray.id);
+	if (frontGroundFBO)
+		glDeleteFramebuffers(1, &frontGroundFBO);
+	if (backgroundFBO)
+		glDeleteFramebuffers(1, &backgroundFBO);
+	if (outFBO)
+		glDeleteFramebuffers(1, &outFBO);
+	glDeleteTextures(1, &frontColorTexture);
+	glDeleteTextures(1, &frontDepthTexture);
+	glDeleteTextures(1, &backColorTexture);
+	glDeleteTextures(1, &backDepthTexture);
+	glDeleteTextures(1, &outTexture);
+
 	delete model_VAO;
 	delete model_mesh;
-	delete window;
+	delete skyBox;
+	delete vertexArrayObjectHandler;
+	delete chunkInstanciator;
 	delete inputHandler;
 	delete shaderHandler;
+	delete window;
 	std::cout << "end game destructor" << std::endl;
 }
 
@@ -266,6 +287,9 @@ void Game::Loop() {
 
 	/*
 	Copy the completed front framebuffer into the default framebuffer for display.
+
+	Maybe drawing directly without copying would be more efficient,
+	but this is a simple way to implement post-processing effects.
 	*/
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, frontGroundFBO);
 	glReadBuffer(GL_COLOR_ATTACHMENT0);
@@ -405,7 +429,6 @@ void Game::manageVAO()
 		delete operation.info;
 		vao_counter++;
 	}
-	vaoOperations_mutex.unlock();
 }
 
 //for the stream, auto-move

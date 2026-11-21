@@ -7,7 +7,7 @@ ChunkClassic::ChunkClassic(int x, int y, int z) : AChunk(x, y, z)
 
 ChunkClassic::~ChunkClassic()
 {
-	// delete data;
+	free(getData());
 }
 
 void ChunkClassic::deleter()

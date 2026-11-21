@@ -95,7 +95,8 @@ SkyBox::~SkyBox()
 	if (skyboxVBO) {
 		glDeleteBuffers(1, &skyboxVBO);
 	}
-	// glDeleteTextures(1, &cubemapTexture);
+	if (cubemapTexture)
+		glDeleteTextures(1, &cubemapTexture);
 
 }
 

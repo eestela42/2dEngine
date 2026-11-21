@@ -61,7 +61,6 @@ Window::Window(const char *name, DrawMode drawMode) {
 
 int Window::ShouldContinue() {
     if (glfwWindowShouldClose(window)) {
-        glfwTerminate();
         return 0;
     }
     return 1;
@@ -100,7 +99,12 @@ int Window::getCursorMode() {
 }
 
 
-Window::~Window() {}
+Window::~Window() {
+    if (window)
+        glfwDestroyWindow(window);
+    window = NULL;
+    glfwTerminate();
+}
 
 GLFWwindow *Window::GetWindow() const {
     return window;

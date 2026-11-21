@@ -55,7 +55,8 @@ class ChunkInstanciator
 	
 	void 								deleteBadChunk(glm::ivec2 chunkTabPos);
 	void 								createGoodChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos);
-	void 								updateChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos);
+	void 								updateChunk(glm::ivec2 chunkWorldPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos);
+	void 								checkChunkPosTab(glm::ivec2 chunkWorldPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos, int x, int y);
 
 
 
@@ -97,6 +98,7 @@ class ChunkInstanciator
 
 	
 	void update();
+
 	void deleteAllChunks();
 	
 	long int getCurrentSeed() const;

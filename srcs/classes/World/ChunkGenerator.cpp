@@ -10,12 +10,18 @@ int ChunkGenerator::seed;
 
 ChunkGenerator::~ChunkGenerator()
 {
-	
+	for (PerlinNoise *noise : noiseList)
+		delete noise;
+	noiseList.clear();
 }
 
 void ChunkGenerator::initNoise(u_int seed)
 {
 	ChunkGenerator::seed = seed;
+
+	for (PerlinNoise *noise : noiseList)
+		delete noise;
+	noiseList.clear();
 
 	PerlinNoise *noise0 = new PerlinNoise(seed);
 	PerlinNoise *noise1 = new PerlinNoise(seed + 13);

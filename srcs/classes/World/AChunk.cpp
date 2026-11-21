@@ -20,8 +20,6 @@ AChunk::~AChunk()
 		neighbours.east->setNeighbour(NEIGHB_WEST, NULL);
 	if (neighbours.west)
 		neighbours.west->setNeighbour(NEIGHB_EAST, NULL);
-
-	mutex.unlock();
 }
 
 

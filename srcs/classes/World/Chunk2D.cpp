@@ -8,7 +8,6 @@ Chunk2D::Chunk2D(int x, int y, int z) : AChunk(x, y, z)
 
 Chunk2D::~Chunk2D()
 {
-	// delete data if needed
 }
 
 void Chunk2D::deleter()
@@ -31,6 +30,7 @@ void Chunk2D::privGenerate(u_char *data)
 		}
 	}
 	this->setData(map.data());
+	free(data);
 }
 
 void Chunk2D::privCompile()

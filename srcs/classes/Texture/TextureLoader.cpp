@@ -48,6 +48,7 @@ TextureArray TextureLoader::LoadTextureArray(std::vector<std::string> fileNames)
         glGenTextures(1, &textureID);
         glBindTexture(GL_TEXTURE_2D_ARRAY, textureID);
         glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, format, width, height, fileNames.size(), 0, format, GL_UNSIGNED_BYTE, NULL);
+        stbi_image_free(data);
         for (unsigned int i = 1; i < fileNames.size(); i++) {
             data = stbi_load(fileNames[i].c_str(), &width, &height, &nrChannels, 0);
             if (data) {
