@@ -16,6 +16,12 @@ ChunkInstanciator::ChunkInstanciator(u_int renderDistance,
 		casse_block(casse_block),
 		displayDistance(displayDistance)
 {
+
+	/*
+	Create a tab that stores the chunks
+	as to compile a chunk we need to have its neighbours generated,
+	the generation distance is render distance + 1
+	*/
 	generationDistance = renderDistance + 1;
 	size_tab = generationDistance * 2 + 1;
 	std::cout << "gen dist : "<< generationDistance << std::endl;
@@ -31,30 +37,35 @@ ChunkInstanciator::ChunkInstanciator(u_int renderDistance,
 	_currentSeed = 1722331298;
 	_currentSeed = std::rand();
 	std::cout << "seed " << _currentSeed << std::endl;
+
+	/*
+	The chunk generator uses a static list of PerlinNoise objects to generate terrain.
+	This is only used in 3D for now
+	*/
 	ChunkGenerator::initNoise(_currentSeed);
 }
 
 ChunkInstanciator::~ChunkInstanciator()
 {
+	deleteAllChunks();
 }
 
-std::mutex &ChunkInstanciator::getTabChunks_mutex()
+std::mutex& ChunkInstanciator::getTabChunks_mutex()
 {
 	return tabChunks_mutex;
 }
 
-std::vector<std::vector<AChunk*>> &ChunkInstanciator::getTabChunks()
+std::vector<std::vector<AChunk*>>& ChunkInstanciator::getTabChunks()
 {
 	return tabChunks;
 }
 
 
 
-int distance(glm::ivec2 a, glm::ivec2 b)
-{
-	return std::sqrt(std::pow(a.x - b.x, 2) + std::pow(a.y - b.y, 2));
-}
-
+/*
+To compile a chunk, we need to have its neighbours generated
+so we check in the tab if the neighbours are generated, and the right ones
+*/
 bool ChunkInstanciator::compileChunksWithNeighbours(AChunk *chunk, s_neighbours neighbours)
 {
 	if (!chunk) //not supposed to happen curently
@@ -69,13 +80,16 @@ bool ChunkInstanciator::compileChunksWithNeighbours(AChunk *chunk, s_neighbours 
 		|| neighbours.east->getPos() != chunkPos + glm::ivec2(1, 0)
 		|| neighbours.west->getPos() != chunkPos + glm::ivec2(-1, 0))
 			return false;
+
 	chunk->pubCompile();
 
 	info_VAO *info = new info_VAO();
 	t_vbo_data vertices = chunk->pubGetPtrVertices();
 	info->vertices.resize(vertices.size);
+
 	if (!info->vertices.empty())
 		std::memcpy(info->vertices.data(), vertices.data, vertices.size);
+
 	info->indices = *chunk->pubGetPtrIndices();
 	info->pos = chunk->getPos();
 
@@ -129,6 +143,18 @@ void ChunkInstanciator::setChunkNeighbours(AChunk *chunk, s_neighbours neighbour
 		neighbours.west->setNeighbour(NEIGHB_EAST, chunk);
 }
 
+
+/*** Get Next Position ***/
+/*
+The chunks are stored in a tab,
+the player position is the "center of the world"
+but as the player moves it cannot be the center of the tab
+
+The getNextPos function is used to get the next chunk to manage (generate, compile)
+The chunks are managed in a spiral pattern around the player position
+*/
+
+
 void ChunkInstanciator::resetGetNextPos()
 {
 	size_direction = 0;
@@ -158,6 +184,9 @@ int ChunkInstanciator::getNextPos(glm::ivec2 &pos)
 
 void ChunkInstanciator::deleteBadChunk(glm::ivec2 chunkTabPos)
 {
+	/*
+	If a chunk is displayed, then we need to remove it from the GPU
+	*/
 	if (tabChunks[chunkTabPos.x][chunkTabPos.y]->getIsCompiled())
 	{
 		vaoOperations_mutex.lock();
@@ -178,6 +207,11 @@ void ChunkInstanciator::deleteBadChunk(glm::ivec2 chunkTabPos)
 	}
 }
 
+/*
+Creates a chunk if it does not exist,
+generates it if it is not generated,
+and compiles it if it is not compiled
+*/
 void ChunkInstanciator::createGoodChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos)
 {
 	
@@ -204,17 +238,27 @@ void ChunkInstanciator::createGoodChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTab
 		}
 	}
 
-	bool didIt = compileChunksWithNeighbours(tabChunks[chunkTabPos.x][chunkTabPos.y], getNeighbours(chunkTabPos, chunkPos));
+	if (tabChunks[chunkTabPos.x][chunkTabPos.y]->getIsCompiled() == false)
+		compileChunksWithNeighbours(tabChunks[chunkTabPos.x][chunkTabPos.y], getNeighbours(chunkTabPos, chunkPos));
 	
 }
 
-void ChunkInstanciator::updateChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos)
+
+/*
+Check if something is wrong with the chunk,
+delete it and create a new one
+or try to compile it
+or update it if needed
+*/
+void ChunkInstanciator::updateChunk(glm::ivec2 chunkWorldPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos)
 {
 	AChunk *chunk = tabChunks[chunkTabPos.x][chunkTabPos.y];
 	if (!chunk) //npt supposed to happen curently
 		return ;
-	bool to_delete = (chunkPos.x - playerChunkPos.x > renderDistance || chunkPos.x - playerChunkPos.x < -renderDistance
-				|| chunkPos.y - playerChunkPos.y > renderDistance || chunkPos.y - playerChunkPos.y < -renderDistance);
+
+	bool to_delete = (chunkWorldPos.x - playerChunkPos.x > renderDistance || chunkWorldPos.x - playerChunkPos.x < -renderDistance
+				|| chunkWorldPos.y - playerChunkPos.y > renderDistance || chunkWorldPos.y - playerChunkPos.y < -renderDistance);
+
 	if (to_delete && chunk->getIsCompiled())
 	{
 		vaoOperations_mutex.lock();
@@ -225,7 +269,7 @@ void ChunkInstanciator::updateChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos,
 	}
 	else if (!to_delete && chunk->getIsCompiled() == false)
 	{
-		compileChunksWithNeighbours(chunk, getNeighbours(chunkTabPos, chunkPos));
+		compileChunksWithNeighbours(chunk, getNeighbours(chunkTabPos, chunkWorldPos));
 	}
 	else if (!to_delete && chunk->getToUpdate())
 	{
@@ -239,40 +283,64 @@ void ChunkInstanciator::updateChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos,
 
 		chunk->setToUpdate(false);
 
-		compileChunksWithNeighbours(chunk, getNeighbours(chunkTabPos, chunkPos));
+		compileChunksWithNeighbours(chunk, getNeighbours(chunkTabPos, chunkWorldPos));
 
 	}
-
 }
 
+void ChunkInstanciator::checkChunkPosTab(glm::ivec2 chunkWorldPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos, int x, int y)
+{
+	if (chunkWorldPos.x != playerChunkPos.x + x || chunkWorldPos.y != playerChunkPos.y + y)
+	{	//Updatechunk fait deja le boulot nn ?
+		deleteBadChunk(chunkTabPos);
+		chunkWorldPos = glm::ivec2(playerChunkPos.x + x, playerChunkPos.y + y);
+		createGoodChunk(chunkWorldPos, chunkTabPos, playerChunkPos);
+	}
+}
 
- 
+/*
+Main update function for the chunk instanciator
+*/
 void ChunkInstanciator::update()
 {
-	bool debug = true ;
-	glm::ivec2 pos = {0, 0};
 	endThread_mutex.lock();
 	while(endThread == false)
 	{
 		endThread_mutex.unlock();
+
+		/*
+		Get the player position and convert it to chunk coordinates
+		*/
 		realPlayerPos_mutex.lock();
 		glm::vec3 playerPos = realPlayerPos;
 		realPlayerPos_mutex.unlock();
 
 		glm::ivec2 playerChunkPos = {playerPos.x / AChunk::sizeX, playerPos.z / AChunk::sizeY};
 		
+		/*
+		Convert the player chunk position to tab coordinates
+		this will be the "center of the world" for the tab of chunks
+		*/
 		glm::ivec2 playerTabPos;
 		playerTabPos.x = mod_floor(playerChunkPos.x, size_tab);
 		playerTabPos.y = mod_floor(playerChunkPos.y, size_tab);
 		
 
+		// zop is the position in the tab of chunks, it will be used to iterate over the tab
 		glm::ivec2 zop = {0, 0};
 		resetGetNextPos();
 		_updateMutex.lock();
+
+		//this is the number of slots in the tab of chunks
 		const int slotsPerSweep = size_tab * size_tab;
+
 		for (int x1 = 0; getKeepUpdating() && x1 < slotsPerSweep; x1++) {
 			endThread_mutex.lock();
-			bool shouldStop = endThread;
+
+			/*
+			Check the stop conditions
+			*/
+			const bool shouldStop = endThread;
 			endThread_mutex.unlock();
 			if (shouldStop)
 				break;
@@ -286,37 +354,49 @@ void ChunkInstanciator::update()
 			}
 			playerHasMoved_mutex.unlock();
 
+			/*
+			we are in the loop, let's start working
+			*/
 			getNextPos(zop);
 			int x = zop.x;
 			int y = zop.y;
 
+			/*
+			modulo operation to get the chunk position in the tab,
+			this makes the player center of the tab, even if it's not at the center of the tab
+			*/
 			glm::ivec2 chunkTabPos(mod_floor(playerTabPos.x + x, size_tab),
 									mod_floor(playerTabPos.y + y, size_tab));
 
 			
-			glm::ivec2 chunkPos;
+			glm::ivec2 chunkWorldPos;
 			AChunk *chunk = tabChunks[chunkTabPos.x][chunkTabPos.y];
 
-
+			/*
+			if no chunk create one, of course
+			*/
 			if (chunk == NULL)
 			{
-				chunkPos = glm::ivec2(playerChunkPos.x + x, playerChunkPos.y + y);
-				createGoodChunk(chunkPos, chunkTabPos, playerChunkPos);
+				chunkWorldPos = glm::ivec2(playerChunkPos.x + x, playerChunkPos.y + y);
+				createGoodChunk(chunkWorldPos, chunkTabPos, playerChunkPos);
 
 				continue ;
 			}
-			chunkPos = chunk->getPos();
-			
-			updateChunk(chunkPos, chunkTabPos, playerChunkPos);
 
-
-			if (chunkPos.x != playerChunkPos.x + x || chunkPos.y != playerChunkPos.y + y)
-			{	//Updatechunk fait deja le boulot nn ?
-				deleteBadChunk(chunkTabPos);
-				chunkPos = glm::ivec2(playerChunkPos.x + x, playerChunkPos.y + y);
-				createGoodChunk(chunkPos, chunkTabPos, playerChunkPos);
-			}
+			/*
+			here the chunk is already created
+			*/
+			chunkWorldPos = chunk->getPos();
 			
+			/*
+			check if the chunk is at the right position in the tab, if not delete it and create a new one
+			*/
+			checkChunkPosTab(chunkWorldPos, chunkTabPos, playerChunkPos, x, y);
+
+			/*
+			we check that everything is fine with it
+			*/
+			updateChunk(chunkWorldPos, chunkTabPos, playerChunkPos);
 		}
 		_updateMutex.unlock();
 		endThread_mutex.lock();
