@@ -184,6 +184,7 @@ void ChunkInstanciator::createGoodChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTab
 	if (!tabChunks[chunkTabPos.x][chunkTabPos.y] || tabChunks[chunkTabPos.x][chunkTabPos.y]->getIsGeneratedMutex() == false)
 	{
 		tabChunks[chunkTabPos.x][chunkTabPos.y] = new Chunk2D(chunkPos.x, chunkPos.y, 0);
+		// tabChunks[chunkTabPos.x][chunkTabPos.y] = new Chunk2D(chunkPos.x, chunkPos.y, 0);
 		setChunkNeighbours(tabChunks[chunkTabPos.x][chunkTabPos.y], getNeighbours(chunkTabPos, chunkPos));
 		tabChunks[chunkTabPos.x][chunkTabPos.y]->pubGenerate(generator.generator(chunkPos));
 

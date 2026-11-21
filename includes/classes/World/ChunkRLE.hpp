@@ -38,7 +38,7 @@ protected:
 	u_int sizeData = 0;
 
 public:
-	static constexpr char *shaderName = (char *)"RLE-Regular";
+	static constexpr char *shaderName = (char *)"RLE-Geometry";
 
 	~ChunkRLE();
 	// ChunkRLE();

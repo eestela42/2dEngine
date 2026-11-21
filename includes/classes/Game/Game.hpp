@@ -136,6 +136,8 @@ private :
 	void manageUI();
 	void drawUI();
 
+	void handleZoom();
+
 	long int seedUI;
 	bool instantChange = false;
 

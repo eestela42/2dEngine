@@ -138,29 +138,9 @@ void Game::Loop() {
 
 	
 	inputHandler->HandleInput();
-	const glm::vec3 direction = glm::normalize(cameraDirection);
-	const float zoomDistance = static_cast<float>(inputHandler->ConsumeScrollOffset()) * 2.0f;
-	if (zoomDistance != 0.0f)
-	{
-		float adjustedZoomDistance = zoomDistance;
-		if (zoomDistance > 0.0f && direction.y < -0.001f)
-		{
-			const float distanceToGround = -cameraPosition.y / direction.y;
-			if (distanceToGround >= 0.0f)
-				adjustedZoomDistance = std::min(zoomDistance, std::max(0.0f, distanceToGround - 0.1f));
-		}
-		cameraPosition += direction * adjustedZoomDistance;
-	}
 
-	if (direction.y < -0.001f)
-	{
-		const float distance = -cameraPosition.y / direction.y;
-		if (distance > 0.0f)
-		{
-			modelPosition = cameraPosition + direction * distance;
-			modelPosition.y = 0.0f;
-		}
-	}
+	handleZoom();
+	
 
 	glm::mat4 view = glm::lookAt(cameraPosition, cameraPosition + cameraDirection, cameraUp);
 	glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)DEFAULT_WINDOW_WIDTH/(float)DEFAULT_WINDOW_HEIGHT, 0.1f, 16000.0f);
@@ -183,7 +163,7 @@ void Game::Loop() {
         std::cerr << "OpenGL error: " << err << std::endl;
     }
 
-	// shaderHandler->Use("RLE-Regular");
+	// shaderHandler->Use("RLE-Geometry");
 	shaderHandler->Use("default_texture");
 	if (Shader::GetActiveShader()) {
 		Shader::GetActiveShader()->SetFloat4("cameraPos", cameraPosition.x, cameraPosition.y, cameraPosition.z, 0);
@@ -362,6 +342,7 @@ void Game::manageVAO()
 		t_vertexData dataStruct = {operation.info->vertices.data(), operation.info->vertices.size()};
 		VertexArrayObject *VAO = new VertexArrayObject(new VertexBufferObject(dataStruct),
 														new ElementBufferObject(operation.info->indices),
+														// shaderHandler->GetShader("RLE-Geometry"));
 														shaderHandler->GetShader("default_texture"));
 		u_int VAO_id = vertexArrayObjectHandler->AddVAO(VAO);
 		pos_to_vao.insert({pos, {VAO_id}});
@@ -472,9 +453,36 @@ void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
 	view = glm::lookAt(	cameraPosition, 
 						cameraPosition + glm::normalize(cameraDirection),
 						cameraUp);
-						
 
 
+
+}
+
+void Game::handleZoom()
+{
+	const glm::vec3 direction = glm::normalize(cameraDirection);
+	const float zoomDistance = static_cast<float>(inputHandler->ConsumeScrollOffset()) * 2.0f;
+	if (zoomDistance != 0.0f)
+	{
+		float adjustedZoomDistance = zoomDistance;
+		if (zoomDistance > 0.0f && direction.y < -0.001f)
+		{
+			const float distanceToGround = -cameraPosition.y / direction.y;
+			if (distanceToGround >= 0.0f)
+				adjustedZoomDistance = std::min(zoomDistance, std::max(0.0f, distanceToGround - 0.1f));
+		}
+		cameraPosition += direction * adjustedZoomDistance;
+	}
+
+	if (direction.y < -0.001f)
+	{
+		const float distance = -cameraPosition.y / direction.y;
+		if (distance > 0.0f)
+		{
+			modelPosition = cameraPosition + direction * distance;
+			modelPosition.y = 0.0f;
+		}
+	}
 }
 
 void Game::manageUI()
