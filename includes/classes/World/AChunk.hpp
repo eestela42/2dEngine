@@ -55,17 +55,19 @@ private:
 	
 	std::mutex mutex;
 
+	/*
+	this will b set by the real chunk implementation
+	*/
+
 	u_char *data = NULL;
 	u_char *modifData = NULL;
-
-
-	
 
 	bool isGenerated = false;
 	bool isCompiled = false;
 	bool toUpdate = false;
 
 	s_neighbours neighbours;
+
 
 	virtual void privGenerate(u_char *data) = 0;
 	virtual void privCompile() = 0;
@@ -85,8 +87,6 @@ public :
 	int posY;
 	int posZ;
 
-
-	
 	
 	static u_int const sizeX = 16;
 	static u_int const sizeY = 16;
