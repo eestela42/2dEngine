@@ -15,33 +15,54 @@ Game::Game()
 {
 	window = new Window("Minecraft", DrawMode::FILL);
 	inputHandler = new InputHandler(window->GetWindow());
-	inputHandler->AddCallback((I_Input*)this); // c'est quoi c'truc
+
+	/*
+	Add this class to the input handler so that it can receive input events.
+	The Game class implements the I_Input interface,
+	which defines the SendKeys method that will be called when input events occur.
+	*/
+	inputHandler->AddCallback((I_Input*)this);
 	inputHandler->AddCallback((I_Input*)window);
 	shaderHandler = new ShaderHandler("shaders");
 	
 
+	/*
+	A VAO stores the informations of triangles to be drawn
+	(vertices (= points), indices to use per triangle, textures positions, etc).
+	in a VAO there is a Vertex Buffer Object (VBO) that stores the vertices and an Element Buffer Object (EBO) that stores the indices.
+	*/
 	vertexArrayObjectHandler = new VertexArrayObjectHandler();
 
 	blockTextureArray = TextureLoader::LoadTextureArray(
 	{
-	std::filesystem::path("textures/texturePack/dirt.jpg"),
-	std::filesystem::path("textures/texturePack/dirt.jpg"),
-	std::filesystem::path("textures/texturePack/grass.jpg"),
-	std::filesystem::path("textures/texturePack/stone.jpg"),
-	std::filesystem::path("textures/texturePack/sand.jpg"),
-	std::filesystem::path("textures/texturePack/oak_wood_side.jpg"),
-	std::filesystem::path("textures/texturePack/leaves_2.jpg"),
-	std::filesystem::path("textures/texturePack/bedrock.jpg"),
-	std::filesystem::path("textures/texturePack/water.jpg"),
-	std::filesystem::path("textures/texturePack/snow.jpg"),
-	std::filesystem::path("textures/texturePack/iron_ore.jpg"),
-	std::filesystem::path("textures/texturePack/gold_ore.jpg"),
-	std::filesystem::path("textures/texturePack/diamond_ore.jpg"),
-	std::filesystem::path("textures/texturePack/UNKNOWN.jpg"),
+		std::filesystem::path("textures/texturePack/dirt.jpg"),
+		std::filesystem::path("textures/texturePack/dirt.jpg"),
+		std::filesystem::path("textures/texturePack/grass.jpg"),
+		std::filesystem::path("textures/texturePack/stone.jpg"),
+		std::filesystem::path("textures/texturePack/sand.jpg"),
+		std::filesystem::path("textures/texturePack/oak_wood_side.jpg"),
+		std::filesystem::path("textures/texturePack/leaves_2.jpg"),
+		std::filesystem::path("textures/texturePack/bedrock.jpg"),
+		std::filesystem::path("textures/texturePack/water.jpg"),
+		std::filesystem::path("textures/texturePack/snow.jpg"),
+		std::filesystem::path("textures/texturePack/iron_ore.jpg"),
+		std::filesystem::path("textures/texturePack/gold_ore.jpg"),
+		std::filesystem::path("textures/texturePack/diamond_ore.jpg"),
+		std::filesystem::path("textures/texturePack/UNKNOWN.jpg"),
 	});
 
+	/*
+	The skybox is a cube that surrounds the entire scene and is used to create the illusion of a distant environment.
+	It is rendered first, before any other objects in the scene,
+	and is typically drawn with a special shader that uses a cubemap texture to create the illusion of a distant environment.
+	*/
 	skyBox = new SkyBox(shaderHandler->GetShader("cubemap"));
 
+	/*
+	The chunk instanciator runs on a separate thread.
+	It receives shared state and synchronization objects so it can update chunks
+	without directly modifying OpenGL objects from the worker thread.
+	*/
 	chunkInstanciator = new ChunkInstanciator(renderDistance, cameraPosition, playerPos_mutex,
 													vaoOperations, vaoOperations_mutex,
 													playerHasMoved, playerHasMoved_mutex,
@@ -49,6 +70,10 @@ Game::Game()
 													casse_block,
 													displayDistance);
 
+	/*
+	ImGui needs both its GLFW and OpenGL backends:
+	GLFW handles window input and events, while the OpenGL backend renders the interface.
+	*/
 	IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -67,9 +92,16 @@ Game::Game()
 
 	seedUI = chunkInstanciator->getCurrentSeed();
 
+	/*
+	This setup creates the framebuffer targets and OpenGL state used by the
+	compute-shader post-processing pass.
+	*/
 	tmpSetupComputeShader();
 
-	
+	/*
+	The OBJ model uses a dedicated VAO and shader.
+	It is separate from chunk VAOs because it uses one model transform rather than chunk data.
+	*/
 	model_mesh = new mesh("object3d/42.obj");
 	model_VAO = new VertexArrayObject(
 		new VertexBufferObject(model_mesh->dataStruct),
@@ -110,6 +142,10 @@ void Game::StartLoop() {
 		fpsCounter = 1.0f / deltaSeconds;
 	}
 
+	/*
+	Signal the worker before joining so it has a chance to finish safely,
+	instead of destroying shared state while update() is still running.
+	*/
 	endThreads_mutex.lock();
 	endThreads = true;
 	endThreads_mutex.unlock();
@@ -147,6 +183,7 @@ void Game::Loop() {
 	glm::mat4 matrix = glm::mat4(1.0f);
 	matrix = proj * view;
 	
+	
 	glBindFramebuffer(GL_FRAMEBUFFER, frontGroundFBO);
     glViewport(0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -154,7 +191,11 @@ void Game::Loop() {
 	glClearDepth(1.0);
 	window->Clear();
 
-	glDepthFunc(GL_LEQUAL);
+	/*
+	Render the scene into the front framebuffer first.
+	The skybox has no depth buffer,
+	meaning that if we compute the depth buffer later, it will be ignored = drawn over.
+	*/
 	skyBox->drawSkybox(view, proj, cameraPosition);
 	glDepthFunc(GL_LESS);
 
@@ -187,6 +228,10 @@ void Game::Loop() {
 		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 		meshTransform = glm::scale(meshTransform, glm::vec3(modelScale));
 
+		/*
+		Move the mesh up or down so its lowest transformed vertex remains on y = 0.
+		This keeps the model attached to the ground independently of its source OBJ bounds.
+		*/
 		float lowestY = 0.0f;
 		if (!model_mesh->vertexes.empty())
 		{
@@ -219,6 +264,9 @@ void Game::Loop() {
 
 	//tmpuseComputeShader();
 
+	/*
+	Copy the completed front framebuffer into the default framebuffer for display.
+	*/
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, frontGroundFBO);
 	glReadBuffer(GL_COLOR_ATTACHMENT0);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -309,6 +357,10 @@ void Game::manageVaoEntity()
 
 void Game::manageVAO()
 {
+	/*
+	VAO operations are queued by the chunk worker because OpenGL objects must be
+	created and destroyed on the thread that owns the OpenGL context.
+	*/
 	std::deque<vao_operation> pendingOperations;
 	vaoOperations_mutex.lock();
 	pendingOperations.swap(vaoOperations);
@@ -332,6 +384,10 @@ void Game::manageVAO()
 			continue;
 		}
 
+		/*
+		A chunk update replaces the existing mesh for that position rather than
+		adding a duplicate VAO, so remove the old GPU object before installing the new one.
+		*/
 		if (existing != pos_to_vao.end())
 		{
 			vertexArrayObjectHandler->RemoveVAO(existing->second.VAO);
@@ -360,6 +416,11 @@ void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
 	glm::vec3 oldCamPos = cameraPosition;
 
 	playerPos_mutex.lock();
+	/*
+	Movement is projected onto the horizontal plane so vertical camera pitch
+	does not change walking speed or lift the player off the ground.
+	THIS WILL BE CHANGED
+	*/
 	glm::vec3 horizontalForward(cameraDirection.x, 0.0f, cameraDirection.z);
 	if (glm::length(horizontalForward) > 0.0001f)
 		horizontalForward = glm::normalize(horizontalForward);
@@ -400,6 +461,11 @@ void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
 	}
 
 	playerPos_mutex.unlock();
+	/*
+	A chunk position change is enough to notify the worker that it must
+	rebuild the visible area around the new player position.
+	This makes the generation follow the player as they move through the world.
+	*/
 	if (oldCamPos.x / AChunk::sizeX != cameraPosition.x / AChunk::sizeX || oldCamPos.z / AChunk::sizeY != cameraPosition.z / AChunk::sizeY)
 	{
 		playerHasMoved_mutex.lock();
@@ -432,6 +498,10 @@ void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
 			firstMouse = false;
 		}
 
+		/*
+		Convert cursor displacement from the previous frame into yaw and pitch.
+		Clamping pitch prevents the camera from flipping at the vertical extremes.
+		*/
 		mouseMoveX = xpos - lastX;
 		mouseMoveY = ypos - lastY;
 
@@ -465,11 +535,15 @@ void Game::handleZoom()
 	if (zoomDistance != 0.0f)
 	{
 		float adjustedZoomDistance = zoomDistance;
+		/*
+		When zooming downward, limit movement so the camera cannot pass through
+		the ground; 0.1 keeps a small clearance between the camera and surface.
+		*/
 		if (zoomDistance > 0.0f && direction.y < -0.001f)
 		{
 			const float distanceToGround = -cameraPosition.y / direction.y;
 			if (distanceToGround >= 0.0f)
-				adjustedZoomDistance = std::min(zoomDistance, std::max(0.0f, distanceToGround - 0.1f));
+				adjustedZoomDistance = std::min(zoomDistance, std::max(0.0f, distanceToGround - 0.5f));
 		}
 		cameraPosition += direction * adjustedZoomDistance;
 	}
@@ -479,6 +553,10 @@ void Game::handleZoom()
 		const float distance = -cameraPosition.y / direction.y;
 		if (distance > 0.0f)
 		{
+			/*
+			Place the OBJ model at the intersection of the downward camera ray
+			and the ground plane, using y = 0 as the terrain baseline.
+			*/
 			modelPosition = cameraPosition + direction * distance;
 			modelPosition.y = 0.0f;
 		}
@@ -557,6 +635,10 @@ void Game::tmpSetupComputeShader()
 {
 	// configure compute shader
 
+	/*
+	The front target stores the scene color and depth before post-processing.
+	THIS IS NOT USED ANYMORE
+	*/
     glGenFramebuffers(1, &frontGroundFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, frontGroundFBO);
 
@@ -588,6 +670,10 @@ void Game::tmpSetupComputeShader()
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     // Setup backgroundFBO (backColorTexture, backDepthTexture)
+	/*
+	The background target provides the second depth/color reference used by
+	the compute pass when deciding how to blend the frame.
+	*/
     glGenFramebuffers(1, &backgroundFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, backgroundFBO);
 
@@ -621,6 +707,10 @@ void Game::tmpSetupComputeShader()
 	glGenFramebuffers(1, &outFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, outFBO);
 
+	/*
+	The output texture is an image bound to the compute shader, so it can be
+	written as a grid of pixels independently of the regular raster pipeline.
+	*/
     glGenTextures(1, &outTexture);
     glBindTexture(GL_TEXTURE_2D, outTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F,  DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, GL_RGBA, GL_FLOAT, nullptr);
@@ -645,6 +735,10 @@ void Game::tmpSetupComputeShader()
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 
+	/*
+	Query the GPU limits before using the compute shader.
+	The arrays and values are kept here as runtime information for the temporary setup.
+	*/
 	shaderHandler->Use("compute");
 	int work_grp_cnt[3];
 	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &work_grp_cnt[0]);
@@ -671,6 +765,10 @@ void Game::tmpuseComputeShader()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	
+    /*
+    The fog distance is scaled for the current compute-shader coordinate system.
+    Multiplying by 1000 here is used because THIS IS SHIT
+    */
 	currentDisplayDistance += (float)renderDistance/360.f * 16;
 	
 	// int startFog = currentDisplayDistance;
@@ -690,6 +788,10 @@ void Game::tmpuseComputeShader()
 		Shader::GetActiveShader()->SetInt("endFog", startFog + sizeFog);
 	}
 
+	/*
+	Bind the post-process result as an image and dispatch one 16x16 work group
+	for each region needed to cover the full window.
+	*/
 	glBindImageTexture(0, outTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 	glDispatchCompute((DEFAULT_WINDOW_WIDTH + 15) / 16, (DEFAULT_WINDOW_HEIGHT + 15) / 16, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
