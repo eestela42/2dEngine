@@ -14,6 +14,8 @@
 
 #include <classes/Window.hpp>
 #include <classes/Game/InputHandler.hpp>
+#include <classes/Game/Camera.hpp>
+#include <classes/Game/Player.hpp>
 #include <classes/ShaderHandler.hpp>
 
 #include <classes/Texture/TextureLoader.hpp>
@@ -50,7 +52,7 @@ struct pair_hash {
     }
 };
 
-class Game: public I_Input
+class Game
 {
 	//tmp
 	unsigned int buffer;
@@ -65,6 +67,8 @@ private :
 
 	Window *window;
 	InputHandler *inputHandler;
+	Camera *camera;
+	Player *player;
 	ShaderHandler *shaderHandler;
 	ChunkInstanciator *chunkInstanciator;
 	VertexArrayObjectHandler *vertexArrayObjectHandler;
@@ -75,33 +79,10 @@ private :
 	ECS *ecs;
 	bool casse_block = false;
 	
-	void SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) /*override*/;
-
-
 	//config
 	int renderDistance = 16;
 
 	TextureArray blockTextureArray;
-
-	//player
-
-	const float speed = 0.15f;
-	const float sensitivity = 0.05f;
-
-	float yaw = -90;
-	float pitch = -75.0f;
-
-	std::mutex playerPos_mutex;
-
-	glm::vec3 const cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
-	glm::vec3 cameraPosition = glm::vec3(0, 50, 0);
-	glm::vec3 cameraDirection = glm::vec3(	cos(glm::radians(yaw)) * cos(glm::radians(pitch)),
-											sin(glm::radians(pitch)),
-											sin(glm::radians(yaw)) * cos(glm::radians(pitch)));
-
-	glm::mat4 view = glm::lookAt(	cameraPosition,
-									cameraPosition + cameraDirection,
-									glm::vec3(0, 1, 0));
 
 
 	void tmpSetupComputeShader();
@@ -148,9 +129,6 @@ private :
 	std::map<std::pair<int, int>, VAO_data> pos_to_vao;
 
 	int vao_counter = 0;
-	bool firstMouse = true;
-	float lastX = 0.0f;
-	float lastY = 0.0f;
 
 	int fpsCounter = 0;
 

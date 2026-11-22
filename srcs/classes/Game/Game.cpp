@@ -15,13 +15,15 @@ Game::Game()
 {
 	window = new Window("Minecraft", DrawMode::FILL);
 	inputHandler = new InputHandler(window->GetWindow());
+	camera = new Camera(window);
+	player = new Player(window, *camera);
 
 	/*
-	Add this class to the input handler so that it can receive input events.
-	The Game class implements the I_Input interface,
-	which defines the SendKeys method that will be called when input events occur.
+	Register the player and camera as input receivers, keeping their input
+	handling separate from the game loop and rendering responsibilities.
 	*/
-	inputHandler->AddCallback((I_Input*)this);
+	inputHandler->AddCallback(player);
+	inputHandler->AddCallback(camera);
 	inputHandler->AddCallback((I_Input*)window);
 	shaderHandler = new ShaderHandler("shaders");
 	
@@ -63,7 +65,7 @@ Game::Game()
 	It receives shared state and synchronization objects so it can update chunks
 	without directly modifying OpenGL objects from the worker thread.
 	*/
-	chunkInstanciator = new ChunkInstanciator(renderDistance, cameraPosition, playerPos_mutex,
+	chunkInstanciator = new ChunkInstanciator(renderDistance, player->GetPosition(), player->GetPositionMutex(),
 													vaoOperations, vaoOperations_mutex,
 													playerHasMoved, playerHasMoved_mutex,
 													endThreads, endThreads_mutex,
@@ -135,6 +137,8 @@ Game::~Game() {
 	delete skyBox;
 	delete vertexArrayObjectHandler;
 	delete chunkInstanciator;
+	delete player;
+	delete camera;
 	delete inputHandler;
 	delete shaderHandler;
 	delete window;
@@ -194,12 +198,21 @@ void Game::Loop() {
 	ImGui::Render();
 
 	
+	const glm::vec3 oldPlayerPosition = player->GetPosition();
 	inputHandler->HandleInput();
+	const glm::vec3 playerPosition = player->GetPosition();
+	if (oldPlayerPosition.x / AChunk::sizeX != playerPosition.x / AChunk::sizeX
+		|| oldPlayerPosition.z / AChunk::sizeY != playerPosition.z / AChunk::sizeY)
+	{
+		std::lock_guard<std::mutex> lock(playerHasMoved_mutex);
+		playerHasMoved = true;
+	}
 
 	handleZoom();
 	
 
-	glm::mat4 view = glm::lookAt(cameraPosition, cameraPosition + cameraDirection, cameraUp);
+	const glm::vec3 cameraPosition = camera->GetPosition(playerPosition);
+	const glm::mat4 view = camera->GetViewMatrix(playerPosition);
 	glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)DEFAULT_WINDOW_WIDTH/(float)DEFAULT_WINDOW_HEIGHT, 0.1f, 16000.0f);
 	glm::mat4 matrix = glm::mat4(1.0f);
 	matrix = proj * view;
@@ -431,147 +444,15 @@ void Game::manageVAO()
 	}
 }
 
-//for the stream, auto-move
-bool Gogogo = false;
-
-void Game::SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) {
-	float speedMultiplier = (keyState[KEY_SPRINT] & KEY_HOLD) ? 20 : 1;
-	glm::vec3 oldCamPos = cameraPosition;
-
-	playerPos_mutex.lock();
-	/*
-	Movement is projected onto the horizontal plane so vertical camera pitch
-	does not change walking speed or lift the player off the ground.
-	THIS WILL BE CHANGED
-	*/
-	glm::vec3 horizontalForward(cameraDirection.x, 0.0f, cameraDirection.z);
-	if (glm::length(horizontalForward) > 0.0001f)
-		horizontalForward = glm::normalize(horizontalForward);
-	else
-		horizontalForward = glm::normalize(glm::vec3(
-			cos(glm::radians(yaw)), 0.0f, sin(glm::radians(yaw))));
-	glm::vec3 horizontalRight = glm::normalize(glm::cross(horizontalForward, cameraUp));
-	glm::vec3 horizontalMovement(0.0f);
-
-	if(keyState[KEY_MOVE_FORWARD] & KEY_HOLD)
-		horizontalMovement += horizontalForward;
-	if(keyState[KEY_MOVE_BACKWARD] & KEY_HOLD)
-		horizontalMovement -= horizontalForward;
-	if(keyState[KEY_MOVE_RIGHTWARD] & KEY_HOLD)
-		horizontalMovement += horizontalRight;
-	if(keyState[KEY_MOVE_LEFTWARD] & KEY_HOLD)
-		horizontalMovement -= horizontalRight;
-
-	if (glm::length(horizontalMovement) > 1.0f)
-		horizontalMovement = glm::normalize(horizontalMovement);
-	cameraPosition += speed * speedMultiplier * horizontalMovement;
-
-	if(keyState[KEY_SPACE] & KEY_HOLD)
-		cameraPosition += cameraUp * speed * speedMultiplier;
-	if(keyState[KEY_MOVE_DOWNWARD] & KEY_HOLD)
-		cameraPosition -= cameraUp * speed * speedMultiplier;
-
-	if (keyState[KEY_DELETE_ONE_BLOCK] & KEY_PRESS)
-		Gogogo = !Gogogo;
-	if (Gogogo)
-	{
-		cameraPosition += 2 * speed * speedMultiplier * horizontalForward;
-		mouseMoveX += 0.5;
-	}
-	if (keyState[KEY_SWITCH_CURSOR_MODE] & KEY_PRESS)
-	{
-		window->switchCursorMode();
-	}
-
-	playerPos_mutex.unlock();
-	/*
-	A chunk position change is enough to notify the worker that it must
-	rebuild the visible area around the new player position.
-	This makes the generation follow the player as they move through the world.
-	*/
-	if (oldCamPos.x / AChunk::sizeX != cameraPosition.x / AChunk::sizeX || oldCamPos.z / AChunk::sizeY != cameraPosition.z / AChunk::sizeY)
-	{
-		playerHasMoved_mutex.lock();
-		playerHasMoved = true;
-		playerHasMoved_mutex.unlock();
-	}
-
-
-	// if (window->getCursorMode() == GLFW_CURSOR_DISABLED)
-	// {
-
-	// 	yaw += mouseMoveX * sensitivity;
-	// 	pitch -= mouseMoveY * sensitivity;
-	// 	if(pitch > 89.0f)
-	// 		pitch =  89.0f;
-	// 	if(pitch < -89.0f)
-	// 		pitch = -89.0f;
-	// }
-
-	double xpos, ypos;
-	glfwGetCursorPos(window->GetWindow(), &xpos, &ypos);
-
-
-	if (window->getCursorMode() == GLFW_CURSOR_DISABLED)
-	{
-		if (firstMouse)
-		{
-			lastX = xpos;
-			lastY = ypos;
-			firstMouse = false;
-		}
-
-		/*
-		Convert cursor displacement from the previous frame into yaw and pitch.
-		Clamping pitch prevents the camera from flipping at the vertical extremes.
-		*/
-		mouseMoveX = xpos - lastX;
-		mouseMoveY = ypos - lastY;
-
-		lastX = xpos;
-		lastY = ypos;
-
-		yaw += mouseMoveX * sensitivity;
-		pitch -= mouseMoveY * sensitivity;
-		pitch = glm::clamp(pitch, -89.0f, 89.0f);
-	}
-	else
-	{
-		firstMouse = true;  // Reset when leaving FPS mode
-	}
-	cameraDirection.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-	cameraDirection.y = sin(glm::radians(pitch));
-	cameraDirection.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-
-	view = glm::lookAt(	cameraPosition, 
-						cameraPosition + glm::normalize(cameraDirection),
-						cameraUp);
-
-
-
-}
-
 void Game::handleZoom()
 {
-	const glm::vec3 direction = glm::normalize(cameraDirection);
 	const float zoomDistance = static_cast<float>(inputHandler->ConsumeScrollOffset()) * 2.0f;
-	if (zoomDistance != 0.0f)
-	{
-		float adjustedZoomDistance = zoomDistance;
-		/*
-		When zooming downward, limit movement so the camera cannot pass through
-		the ground; 0.1 keeps a small clearance between the camera and surface.
-		*/
-		if (zoomDistance > 0.0f && direction.y < -0.001f)
-		{
-			const float distanceToGround = -cameraPosition.y / direction.y;
-			if (distanceToGround >= 0.0f)
-				adjustedZoomDistance = std::min(zoomDistance, std::max(0.0f, distanceToGround - 0.5f));
-		}
-		cameraPosition += direction * adjustedZoomDistance;
-	}
+	const glm::vec3 playerPosition = player->GetPosition();
+	camera->Zoom(playerPosition, zoomDistance);
 
-	if (direction.y < -0.001f)
+	const glm::vec3 direction = glm::normalize(camera->GetDirection());
+	const glm::vec3 cameraPosition = camera->GetPosition(playerPosition);
+	if (!camera->IsFree() && direction.y < -0.001f)
 	{
 		const float distance = -cameraPosition.y / direction.y;
 		if (distance > 0.0f)
@@ -601,6 +482,7 @@ void Game::manageUI()
 	ImGui::Begin("This is nice UI", nullptr, ImGuiWindowFlags_AlwaysAutoResize);;
 
 	ImGui::Text("FPS: %d", fpsCounter);
+	const glm::vec3 cameraPosition = camera->GetPosition(player->GetPosition());
 	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", cameraPosition.x, cameraPosition.y, cameraPosition.z);
 	ImGui::Text("Seed: %ld", chunkInstanciator->getCurrentSeed());
 	ImGui::Text("Entities: %d", amount);
@@ -641,7 +523,7 @@ void Game::manageUI()
 	ImGui::Text("Toogle free mouse: Press left.ALT");
 	if (ImGui::CollapsingHeader("Inputs"))
 	{
-		ImGui::Text("WASD: Move parallel to ground");
+		ImGui::Text("WASD: Move player (normal cursor) / camera (disabled cursor)");
 		ImGui::Text("Mouse wheel: Zoom along camera axis");
 		ImGui::Text("Space: Go up");
 		ImGui::Text("Left Shift: Go down");
