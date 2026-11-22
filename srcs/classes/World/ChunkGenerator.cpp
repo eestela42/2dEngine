@@ -291,6 +291,11 @@ int ChunkGenerator::gen3DCave(int hill_height, int pos, int &z)
 u_char		*ChunkGenerator::generator(glm::ivec2 tmp_pos) {
 	if (PROFILER_ON)
 		Profiler::StartTracking("the generator");
+
+		/*
+	2D IMPLEMENTATION DOENST NEED THAT
+	*/
+	return nullptr;
 	sizeX = 16;
 	sizeY = 16;
 	sizeZ = 256;
@@ -298,10 +303,14 @@ u_char		*ChunkGenerator::generator(glm::ivec2 tmp_pos) {
 	posX = tmp_pos.x;
 	posY = tmp_pos.y;
 	data = (u_char*)calloc(sizeX * sizeY * sizeZ, sizeof(*data));
+
+
 	if (!data)
 	{
 		std::cout << "raw map calloc failed !" << std::endl;
 	}
+
+	
 	
 	engine.seed(seed * posX * posY);
 	

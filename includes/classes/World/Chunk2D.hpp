@@ -4,8 +4,11 @@
 
 class Chunk2D : public AChunk {
 	private:
+		/*the point that will be used by the graphic API to draw the chunk*/
 		std::vector<Vertex_texture>	vertices;
+		/*the indices that will be used by the graphic API to draw the chunk*/
 		std::vector<unsigned int> 	indices;
+		/*the map of the chunk, it will be used to generate the vertices and indices*/
 		std::vector<u_char> map;
 
 	public:
