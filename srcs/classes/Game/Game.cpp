@@ -1,9 +1,43 @@
 #include <classes/Game/Game.hpp>
 #include <classes/Game/mesh.hpp>
 #include <algorithm>
+#include <chrono>
+#include <cstddef>
+#include <iostream>
 #include "../../../imgui/imgui.h"
 #include "../../../imgui/backends/imgui_impl_glfw.h"
 #include "../../../imgui/backends/imgui_impl_opengl3.h"
+
+// namespace
+// {
+// 	class SlowBlockTimer
+// 	{
+// 	public:
+// 		explicit SlowBlockTimer(const char *name, std::size_t payloadBytes = 0)
+// 			: name(name), payloadBytes(payloadBytes), start(std::chrono::steady_clock::now())
+// 		{
+// 		}
+
+// 		~SlowBlockTimer()
+// 		{
+// 			const auto elapsed = std::chrono::steady_clock::now() - start;
+// 			if (elapsed >= std::chrono::milliseconds(50))
+// 			{
+// 				const double milliseconds =
+// 					std::chrono::duration<double, std::milli>(elapsed).count();
+// 				std::cerr << "[slow] " << name << ": " << milliseconds << " ms";
+// 				if (payloadBytes != 0)
+// 					std::cerr << " (" << payloadBytes << " bytes)";
+// 				std::cerr << '\n';
+// 			}
+// 		}
+
+// 	private:
+// 		const char *name;
+// 		std::size_t payloadBytes;
+// 		std::chrono::steady_clock::time_point start;
+// 	};
+// }
 
 unsigned int depthMapFBO;
 const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
@@ -71,6 +105,9 @@ Game::Game()
 													casse_block,
 													displayDistance);
 
+
+	player->SetupChunks(chunkInstanciator->getTabChunks(), chunkInstanciator->getTabChunks_mutex());
+
 	/*
 	ImGui needs both its GLFW and OpenGL backends:
 	GLFW handles window input and events, while the OpenGL backend renders the interface.
@@ -103,7 +140,7 @@ Game::Game()
 	The OBJ model uses a dedicated VAO and shader.
 	It is separate from chunk VAOs because it uses one model transform rather than chunk data.
 	*/
-	model_mesh = new mesh("object3d/42.obj");
+	model_mesh = new mesh("object3d/sheep.obj");
 	model_VAO = new VertexArrayObject(
 		new VertexBufferObject(model_mesh->dataStruct),
 		new ElementBufferObject(model_mesh->shapeAssemblyData),
@@ -397,10 +434,23 @@ void Game::manageVAO()
 	VAO operations are queued by the chunk worker because OpenGL objects must be
 	created and destroyed on the thread that owns the OpenGL context.
 	*/
+	const int maxVaoAdditionsPerFrame = 2;
 	std::deque<vao_operation> pendingOperations;
-	vaoOperations_mutex.lock();
-	pendingOperations.swap(vaoOperations);
-	vaoOperations_mutex.unlock();
+	{
+		std::lock_guard<std::mutex> lock(vaoOperations_mutex);
+		int additionsThisFrame = 0;
+		while (!vaoOperations.empty())
+		{
+			if (vaoOperations.front().type == vao_operation::Type::Add
+				&& additionsThisFrame >= maxVaoAdditionsPerFrame)
+				break;
+
+			if (vaoOperations.front().type == vao_operation::Type::Add)
+				++additionsThisFrame;
+			pendingOperations.push_back(vaoOperations.front());
+			vaoOperations.pop_front();
+		}
+	}
 
 	while (!pendingOperations.empty())
 	{
@@ -432,12 +482,24 @@ void Game::manageVAO()
 		}
 
 		t_vertexData dataStruct = {operation.info->vertices.data(), operation.info->vertices.size()};
-		VertexArrayObject *VAO = new VertexArrayObject(new VertexBufferObject(dataStruct),
-														new ElementBufferObject(operation.info->indices),
-														// shaderHandler->GetShader("RLE-Geometry"));
-														shaderHandler->GetShader("default_texture"));
+		const std::size_t indexDataSize =
+			operation.info->indices.size() * sizeof(unsigned int);
+
+		VertexBufferObject *vertexBuffer;
+		vertexBuffer = new VertexBufferObject(dataStruct);
+
+		ElementBufferObject *elementBuffer;
+		elementBuffer = new ElementBufferObject(operation.info->indices);
+
+		VertexArrayObject *VAO;
+		VAO = new VertexArrayObject(
+			vertexBuffer,
+			elementBuffer,
+			shaderHandler->GetShader("default_texture"));
+
 		u_int VAO_id = vertexArrayObjectHandler->AddVAO(VAO);
 		pos_to_vao.insert({pos, {VAO_id}});
+
 		delete operation.info;
 		vao_counter++;
 	}
@@ -497,6 +559,7 @@ void Game::manageUI()
 			modelGroundOffsetDirty = true;
 	}
 
+	player->DrawUI();
 	camera->DrawUI();
 
 	

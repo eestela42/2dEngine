@@ -137,7 +137,7 @@ It is kept in the interface so callers can use the same chunk API for 2D and 3D 
 */
 bool						Chunk2D::privIsFilled(int x, int y, int z)
 {
-	return true;
+	return map[x + y * sizeX] != 0;
 }
 
 /*
