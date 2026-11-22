@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include "../../../imgui/imgui.h"
 
 Camera::Camera(Window *window)
 	: window(window)
@@ -9,21 +10,29 @@ Camera::Camera(Window *window)
 	UpdateDirection();
 }
 
-void Camera::SendKeys(unsigned char *keyState, double mouseMoveX, double mouseMoveY)
+void Camera::SendInput(const InputFrame &input)
 {
+	const unsigned char *keyState = input.keyState;
+	double mouseMoveX = input.mouseMoveX;
+	double mouseMoveY = input.mouseMoveY;
 	const bool cursorDisabled = window->getCursorMode() == GLFW_CURSOR_DISABLED;
 	const bool modeChanged = cursorDisabled != freeCamera;
 	if (modeChanged)
 	{
 		if (cursorDisabled)
-			freePosition = followPosition + offset;
+			freePosition = GetPosition(followPosition);
+		else
+			FocusOn(followPosition + cameraUp * focusHeight);
 		freeCamera = cursorDisabled;
 		firstMouse = true;
 	}
 
+	float zoomDistance = static_cast<float>(input.scrollY) * 2.0f;
+
+	const float speedMultiplier = (keyState[KEY_SPRINT] & KEY_HOLD) ? 20.0f : 1.0f;
+
 	if (freeCamera && !modeChanged)
 	{
-		const float speedMultiplier = (keyState[KEY_SPRINT] & KEY_HOLD) ? 20.0f : 1.0f;
 		glm::vec3 horizontalForward(direction.x, 0.0f, direction.z);
 		if (glm::length(horizontalForward) > 0.0001f)
 			horizontalForward = glm::normalize(horizontalForward);
@@ -56,6 +65,13 @@ void Camera::SendKeys(unsigned char *keyState, double mouseMoveX, double mouseMo
 		if (autoMove)
 			freePosition += 2.0f * speed * speedMultiplier * horizontalForward;
 	}
+	else if (!freeCamera && !modeChanged)
+	{
+		if (keyState[KEY_SPACE] & KEY_HOLD)
+			zoomDistance += speed * speedMultiplier;
+		if (keyState[KEY_MOVE_DOWNWARD] & KEY_HOLD)
+			zoomDistance -= speed * speedMultiplier;
+	}
 
 	double xpos, ypos;
 	glfwGetCursorPos(window->GetWindow(), &xpos, &ypos);
@@ -87,6 +103,7 @@ void Camera::SendKeys(unsigned char *keyState, double mouseMoveX, double mouseMo
 	}
 
 	UpdateDirection();
+	Zoom(zoomDistance);
 }
 
 void Camera::SetFollowPosition(const glm::vec3 &playerPosition)
@@ -94,16 +111,27 @@ void Camera::SetFollowPosition(const glm::vec3 &playerPosition)
 	followPosition = playerPosition;
 }
 
-bool Camera::IsFree() const
+void Camera::FocusOn(const glm::vec3 &target)
 {
-	return freeCamera;
+	const glm::vec3 cameraPosition = freeCamera ? freePosition : GetPosition(followPosition);
+	const glm::vec3 directionToTarget = target - cameraPosition;
+	const float distanceToTarget = glm::length(directionToTarget);
+	if (distanceToTarget <= 0.0001f)
+		return;
+
+	focusDistance = distanceToTarget;
+	direction = glm::normalize(directionToTarget);
+	yaw = glm::degrees(std::atan2(direction.z, direction.x));
+	pitch = glm::degrees(std::asin(glm::clamp(direction.y, -1.0f, 1.0f)));
+	UpdateDirection();
 }
 
 glm::vec3 Camera::GetPosition(const glm::vec3 &playerPosition) const
 {
 	if (freeCamera)
 		return freePosition;
-	return playerPosition + offset;
+	const glm::vec3 focusTarget = playerPosition + cameraUp * focusHeight;
+	return focusTarget - direction * focusDistance;
 }
 
 const glm::vec3 &Camera::GetDirection() const
@@ -117,14 +145,14 @@ glm::mat4 Camera::GetViewMatrix(const glm::vec3 &playerPosition) const
 	return glm::lookAt(position, position + glm::normalize(direction), cameraUp);
 }
 
-void Camera::Zoom(const glm::vec3 &playerPosition, float distance)
+void Camera::Zoom(float distance)
 {
 	if (distance == 0.0f)
 		return;
 
 	const glm::vec3 normalizedDirection = glm::normalize(direction);
 	float adjustedDistance = distance;
-	const glm::vec3 position = GetPosition(playerPosition);
+	const glm::vec3 position = GetPosition(followPosition);
 
 	if (distance > 0.0f && normalizedDirection.y < -0.001f)
 	{
@@ -136,7 +164,27 @@ void Camera::Zoom(const glm::vec3 &playerPosition, float distance)
 	if (freeCamera)
 		freePosition += normalizedDirection * adjustedDistance;
 	else
-		offset += normalizedDirection * adjustedDistance;
+		focusDistance = std::max(0.5f, focusDistance - adjustedDistance);
+}
+
+void Camera::DrawUI()
+{
+	if (freeCamera || !ImGui::CollapsingHeader("Camera lock"))
+		return;
+
+	float lockedYaw = yaw;
+	float lockedPitch = pitch;
+	float lockedDistance = focusDistance;
+	const bool yawChanged = ImGui::SliderFloat("Yaw", &lockedYaw, -180.0f, 180.0f);
+	const bool pitchChanged = ImGui::SliderFloat("Pitch", &lockedPitch, -89.0f, 89.0f);
+	if (yawChanged || pitchChanged)
+	{
+		yaw = lockedYaw;
+		pitch = glm::clamp(lockedPitch, -89.0f, 89.0f);
+		UpdateDirection();
+	}
+	if (ImGui::SliderFloat("Distance", &lockedDistance, 0.5f, 200.0f))
+		focusDistance = std::max(0.5f, lockedDistance);
 }
 
 void Camera::UpdateDirection()

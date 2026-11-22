@@ -32,9 +32,6 @@ class ChunkInstanciator
 	std::mutex 							&realPlayerPos_mutex;
 	glm::vec3 							&realPlayerPos;
 
-		std::mutex 							&playerHasMoved_mutex;
-	bool 								&playerHasMoved;
-	
 	std::mutex 							&vaoOperations_mutex;
 	std::deque<vao_operation> 			&vaoOperations;
 
@@ -54,6 +51,7 @@ class ChunkInstanciator
 	
 	
 	void 								deleteBadChunk(glm::ivec2 chunkTabPos);
+	glm::ivec2							getPlayerChunkPos();
 	void 								createGoodChunk(glm::ivec2 chunkPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos);
 	void 								updateChunk(glm::ivec2 chunkWorldPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos);
 	void 								checkChunkPosTab(glm::ivec2 chunkWorldPos, glm::ivec2 chunkTabPos, glm::ivec2 playerChunkPos, int x, int y);
@@ -86,7 +84,6 @@ class ChunkInstanciator
 	ChunkInstanciator(u_int renderDistance,
 						glm::vec3 &playerPos, std::mutex &playerPos_mutex,
 						std::deque<vao_operation> &vaoOperations, std::mutex &vaoOperations_mutex,
-						bool &playerHasMoved, std::mutex &playerHasMoved_mutex,
 						bool &windoeShouldClose, std::mutex &windowShouldClose_mutex,
 						bool& casse_block,
 						int &displayDistance);

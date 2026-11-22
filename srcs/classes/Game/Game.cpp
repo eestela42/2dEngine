@@ -67,7 +67,6 @@ Game::Game()
 	*/
 	chunkInstanciator = new ChunkInstanciator(renderDistance, player->GetPosition(), player->GetPositionMutex(),
 													vaoOperations, vaoOperations_mutex,
-													playerHasMoved, playerHasMoved_mutex,
 													endThreads, endThreads_mutex,
 													casse_block,
 													displayDistance);
@@ -198,17 +197,8 @@ void Game::Loop() {
 	ImGui::Render();
 
 	
-	const glm::vec3 oldPlayerPosition = player->GetPosition();
 	inputHandler->HandleInput();
 	const glm::vec3 playerPosition = player->GetPosition();
-	if (oldPlayerPosition.x / AChunk::sizeX != playerPosition.x / AChunk::sizeX
-		|| oldPlayerPosition.z / AChunk::sizeY != playerPosition.z / AChunk::sizeY)
-	{
-		std::lock_guard<std::mutex> lock(playerHasMoved_mutex);
-		playerHasMoved = true;
-	}
-
-	handleZoom();
 	
 
 	const glm::vec3 cameraPosition = camera->GetPosition(playerPosition);
@@ -256,26 +246,35 @@ void Game::Loop() {
 
 	shaderHandler->Use("model");
 	if (Shader::GetActiveShader()) {
-		glm::mat4 meshTransform(1.0f);
+		// Map the model's local X-up axis to the world's Y-up axis.
+		glm::mat4 meshTransform = glm::rotate(
+			glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
 		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
 		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 		meshTransform = glm::scale(meshTransform, glm::vec3(modelScale));
 
+
 		/*
-		Move the mesh up or down so its lowest transformed vertex remains on y = 0.
-		This keeps the model attached to the ground independently of its source OBJ bounds.
+		Compute the model's ground offset so it rests on the ground plane.
+		THIS IS TEMPORARY
 		*/
-		float lowestY = 0.0f;
-		if (!model_mesh->vertexes.empty())
+		if (modelGroundOffsetDirty)
 		{
-			lowestY = (meshTransform * glm::vec4(model_mesh->vertexes.front(), 1.0f)).y;
-			for (const glm::vec3& vertex : model_mesh->vertexes)
-				lowestY = std::min(lowestY, (meshTransform * glm::vec4(vertex, 1.0f)).y);
+			modelGroundOffset = 0.0f;
+			if (!model_mesh->vertexes.empty())
+			{
+				modelGroundOffset = (meshTransform * glm::vec4(model_mesh->vertexes.front(), 1.0f)).y;
+				for (const glm::vec3 &vertex : model_mesh->vertexes)
+					modelGroundOffset = std::min(
+						modelGroundOffset, (meshTransform * glm::vec4(vertex, 1.0f)).y);
+			}
+			modelGroundOffsetDirty = false;
 		}
 
-		glm::mat4 model = glm::translate(glm::mat4(1.0f),
-			glm::vec3(modelPosition.x, modelPosition.y - lowestY, modelPosition.z)) * meshTransform;
+		glm::vec3 modelPosition = playerPosition;
+		modelPosition.y -= modelGroundOffset;
+		glm::mat4 model = glm::translate(glm::mat4(1.0f), modelPosition) * meshTransform;
 		Shader::GetActiveShader()->Setmat4("model", model);
 		Shader::GetActiveShader()->Setmat4("view", view);
 		Shader::GetActiveShader()->Setmat4("proj", proj);
@@ -444,29 +443,6 @@ void Game::manageVAO()
 	}
 }
 
-void Game::handleZoom()
-{
-	const float zoomDistance = static_cast<float>(inputHandler->ConsumeScrollOffset()) * 2.0f;
-	const glm::vec3 playerPosition = player->GetPosition();
-	camera->Zoom(playerPosition, zoomDistance);
-
-	const glm::vec3 direction = glm::normalize(camera->GetDirection());
-	const glm::vec3 cameraPosition = camera->GetPosition(playerPosition);
-	if (!camera->IsFree() && direction.y < -0.001f)
-	{
-		const float distance = -cameraPosition.y / direction.y;
-		if (distance > 0.0f)
-		{
-			/*
-			Place the OBJ model at the intersection of the downward camera ray
-			and the ground plane, using y = 0 as the terrain baseline.
-			*/
-			modelPosition = cameraPosition + direction * distance;
-			modelPosition.y = 0.0f;
-		}
-	}
-}
-
 void Game::manageUI()
 {
 	/*
@@ -515,9 +491,13 @@ void Game::manageUI()
 
 	if (ImGui::CollapsingHeader("Mesh"))
 	{
-		ImGui::DragFloat("Scale", &modelScale, 0.05f, 0.1f, 20.0f);
-		ImGui::DragFloat3("Rotation (degrees)", glm::value_ptr(modelRotation), 1.0f, -360.0f, 360.0f);
+		if (ImGui::DragFloat("Scale", &modelScale, 0.05f, 0.1f, 20.0f))
+			modelGroundOffsetDirty = true;
+		if (ImGui::DragFloat3("Rotation (degrees)", glm::value_ptr(modelRotation), 1.0f, -360.0f, 360.0f))
+			modelGroundOffsetDirty = true;
 	}
+
+	camera->DrawUI();
 
 	
 	ImGui::Text("Toogle free mouse: Press left.ALT");
@@ -525,9 +505,8 @@ void Game::manageUI()
 	{
 		ImGui::Text("WASD: Move player (normal cursor) / camera (disabled cursor)");
 		ImGui::Text("Mouse wheel: Zoom along camera axis");
-		ImGui::Text("Space: Go up");
-		ImGui::Text("Left Shift: Go down");
-		ImGui::Text("Left Control: Sprint");
+		ImGui::Text("Space / Left Control: Zoom in / out (normal cursor); move up / down (free camera)");
+		ImGui::Text("Left Shift: Sprint");
 		ImGui::Text("Left ALT: Toggle free mouse");
 	}
 

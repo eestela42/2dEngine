@@ -17,5 +17,6 @@ void main()
 	out_light = 0.5f + 0.5f * float(light);
 	TexCoord = aTexCoord;
 	out_type =  type;
+	// Chunk data stores height in Z; render it as Y-up.
     gl_Position = matrix * vec4(aPos.xzy, 1.0);
 }

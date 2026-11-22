@@ -26,7 +26,7 @@ class Window : I_Input
         int ShouldContinue();
         void Clear();
         void SwapBuffersAndPollEvents();
-		void SendKeys(u_char *keyState, double mouseMoveX, double mouseMoveY) override;
+		void SendInput(const InputFrame &input) override;
 		void switchCursorMode();
 		void setCursorMode(int mode);
 		int getCursorMode();

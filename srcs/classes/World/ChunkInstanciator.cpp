@@ -1,17 +1,16 @@
 #include <classes/World/ChunkInstanciator.hpp>
 #include <cstring>
+#include <cmath>
 
 ChunkInstanciator::ChunkInstanciator(u_int renderDistance,
 										glm::vec3 &playerPos,					std::mutex &playerPos_mutex,
 										std::deque<vao_operation> &vaoOperations, std::mutex &vaoOperations_mutex,
-										bool &playerHasMoved, 					std::mutex &playerHasMoved_mutex,
 										bool &endThread, 						std::mutex &endThread_mutex,
 										bool& casse_block,
 										int &displayDistance)
 	: renderDistance(renderDistance),
 		realPlayerPos(playerPos), realPlayerPos_mutex(playerPos_mutex),
 		vaoOperations(vaoOperations), vaoOperations_mutex(vaoOperations_mutex),
-		playerHasMoved(playerHasMoved), playerHasMoved_mutex(playerHasMoved_mutex),
 		endThread(endThread), endThread_mutex(endThread_mutex),
 		casse_block(casse_block),
 		displayDistance(displayDistance)
@@ -298,6 +297,14 @@ void ChunkInstanciator::checkChunkPosTab(glm::ivec2 chunkWorldPos, glm::ivec2 ch
 	}
 }
 
+glm::ivec2 ChunkInstanciator::getPlayerChunkPos()
+{
+	std::lock_guard<std::mutex> lock(realPlayerPos_mutex);
+	return glm::ivec2(
+		static_cast<int>(std::floor(realPlayerPos.x / AChunk::sizeX)),
+		static_cast<int>(std::floor(realPlayerPos.z / AChunk::sizeY)));
+}
+
 /*
 Main update function for the chunk instanciator
 */
@@ -311,11 +318,7 @@ void ChunkInstanciator::update()
 		/*
 		Get the player position and convert it to chunk coordinates
 		*/
-		realPlayerPos_mutex.lock();
-		glm::vec3 playerPos = realPlayerPos;
-		realPlayerPos_mutex.unlock();
-
-		glm::ivec2 playerChunkPos = {playerPos.x / AChunk::sizeX, playerPos.z / AChunk::sizeY};
+		glm::ivec2 playerChunkPos = getPlayerChunkPos();
 		
 		/*
 		Convert the player chunk position to tab coordinates
@@ -345,14 +348,8 @@ void ChunkInstanciator::update()
 			if (shouldStop)
 				break;
 				
-			playerHasMoved_mutex.lock();
-			if (playerHasMoved)
-			{
-				playerHasMoved = false;
-				playerHasMoved_mutex.unlock();
+			if (getPlayerChunkPos() != playerChunkPos)
 				break ;
-			}
-			playerHasMoved_mutex.unlock();
 
 			/*
 			we are in the loop, let's start working

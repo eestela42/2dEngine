@@ -75,8 +75,8 @@ void Window::SwapBuffersAndPollEvents() {
     glfwPollEvents(); //Checks for event and calls callbacks (framebuffer_size_callback wouldn't be called if it wasn't for this function)
 }
 
-void Window::SendKeys(u_char *keyState, __attribute__((unused)) double mouseMoveX, __attribute__((unused)) double mouseMoveY) {
-	if(keyState[KEY_ESCAPE] & KEY_PRESS)
+void Window::SendInput(const InputFrame &input) {
+	if(input.keyState[KEY_ESCAPE] & KEY_PRESS)
         glfwSetWindowShouldClose(window, true);
 }
 

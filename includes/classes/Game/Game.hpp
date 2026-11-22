@@ -89,13 +89,12 @@ private :
 	void tmpuseComputeShader();
 
 	mesh *model_mesh;
-	glm::vec3 modelPosition = glm::vec3(0.0f);
-	glm::vec3 modelRotation = glm::vec3(0.0f, 90.0f, 0.0f);
+	glm::vec3 modelRotation = glm::vec3(90.0f, 0.0f, -90.0f);
 	float modelScale = 0.85f;
+	float modelGroundOffset = 0.0f;
+	bool modelGroundOffsetDirty = true;
 
 
-	std::mutex 					playerHasMoved_mutex;
-	bool 						playerHasMoved = false;
 	std::mutex						vaoOperations_mutex;
 	std::deque<vao_operation>		vaoOperations;
 
@@ -116,8 +115,6 @@ private :
 
 	void manageUI();
 	void drawUI();
-
-	void handleZoom();
 
 	long int seedUI;
 	bool instantChange = false;

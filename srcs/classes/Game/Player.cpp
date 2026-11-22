@@ -7,10 +7,9 @@ Player::Player(Window *window, Camera &camera)
 {
 }
 
-void Player::SendKeys(unsigned char *keyState, double mouseMoveX, double mouseMoveY)
+void Player::SendInput(const InputFrame &input)
 {
-	(void)mouseMoveX;
-	(void)mouseMoveY;
+	const unsigned char *keyState = input.keyState;
 
 	const bool freeCamera = window->getCursorMode() == GLFW_CURSOR_DISABLED;
 	const float speedMultiplier = (keyState[KEY_SPRINT] & KEY_HOLD) ? 20.0f : 1.0f;
@@ -42,17 +41,13 @@ void Player::SendKeys(unsigned char *keyState, double mouseMoveX, double mouseMo
 			horizontalMovement = glm::normalize(horizontalMovement);
 		position += speed * speedMultiplier * horizontalMovement;
 
-		if (keyState[KEY_SPACE] & KEY_HOLD)
-			position += worldUp * speed * speedMultiplier;
-		if (keyState[KEY_MOVE_DOWNWARD] & KEY_HOLD)
-			position -= worldUp * speed * speedMultiplier;
-
 		if (keyState[KEY_DELETE_ONE_BLOCK] & KEY_PRESS)
 			autoMove = !autoMove;
 		if (autoMove)
 			position += 2.0f * speed * speedMultiplier * horizontalForward;
 	}
 
+	position.y = 0.0f;
 	camera.SetFollowPosition(position);
 
 	if (keyState[KEY_SWITCH_CURSOR_MODE] & KEY_PRESS)

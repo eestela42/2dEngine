@@ -36,11 +36,17 @@
 #define KEY_LAST				19
 
 
-
+struct InputFrame {
+	const unsigned char *keyState;
+	double mouseMoveX;
+	double mouseMoveY;
+	double scrollX;
+	double scrollY;
+};
 
 class I_Input {
 public:
-    virtual void SendKeys(unsigned char *keyState, double mouseMoveX, double mouseMoveY) = 0;
+    virtual void SendInput(const InputFrame &input) = 0;
 };
 
 #endif

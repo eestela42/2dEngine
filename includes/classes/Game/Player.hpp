@@ -14,7 +14,7 @@ class Player : public I_Input
 public:
 	Player(Window *window, Camera &camera);
 
-	void SendKeys(unsigned char *keyState, double mouseMoveX, double mouseMoveY) override;
+	void SendInput(const InputFrame &input) override;
 	glm::vec3 &GetPosition();
 	std::mutex &GetPositionMutex();
 
@@ -23,7 +23,7 @@ private:
 	Camera &camera;
 	const float speed = 0.15f;
 	const glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
-	glm::vec3 position = glm::vec3(0.0f, 50.0f, 0.0f);
+	glm::vec3 position = glm::vec3(0.0f);
 	std::mutex positionMutex;
 	bool autoMove = false;
 };

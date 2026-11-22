@@ -36,26 +36,21 @@ void InputHandler::HandleInput()
 		}
 		keyWasDown[i] = isDown;
 	}
-	for (std::vector<I_Input*>::iterator iterator = callbackVector.begin(); iterator != callbackVector.end(); iterator++) {
-
-		(*iterator)->SendKeys(keyState, mouseMoveX, mouseMoveY);
-
-
-    }
+	const InputFrame inputFrame{keyState, mouseMoveX, mouseMoveY, scrollX, scrollY};
+	scrollX = 0.0;
+	scrollY = 0.0;
+	for (I_Input *callback : callbackVector)
+		callback->SendInput(inputFrame);
 }
 
-double InputHandler::ConsumeScrollOffset()
-{
-	double offset = scrollOffset;
-	scrollOffset = 0.0;
-	return offset;
-}
-
-void InputHandler::ScrollCallback(GLFWwindow *window, __attribute__((unused)) double xOffset, double yOffset)
+void InputHandler::ScrollCallback(GLFWwindow *window, double xOffset, double yOffset)
 {
 	InputHandler *handler = static_cast<InputHandler*>(glfwGetWindowUserPointer(window));
 	if (handler)
-		handler->scrollOffset += yOffset;
+	{
+		handler->scrollX += xOffset;
+		handler->scrollY += yOffset;
+	}
 }
 
 void InputHandler::MapKeys() {

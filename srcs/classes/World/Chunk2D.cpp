@@ -157,6 +157,7 @@ and matching indices form the face's two triangles.
 */
 void	Chunk2D::createFace(int x, int y, int z,  int tab_x, int tab_y, int tab_z, int block_type, int dir)
 {
+
 	int start = vertices.size();
 	const glm::vec2 uvBottomLeft(0.0f, 0.0f);
 	const glm::vec2 uvBottomRight(1.f, 0.0f);
