@@ -20,22 +20,21 @@ void InputHandler::HandleInput()
 	posX = newPosX;
 	posY = newPosY;
 
-	for (u_int i = 0; i < GLFW_KEY_LAST; i++) {
-		if (keyMap[i]) {
-			u_int key = keyMap[i];
-			int type = glfwGetKey(window, i);
-			if (type == GLFW_PRESS) {
-				if (!(keyState[key] & KEY_HOLD)) {
-					keyState[key] = KEY_HOLD | KEY_PRESS;
-				}
-				else {
-					keyState[key] &= ~KEY_PRESS;
-				}
-			}
-			else if(type == GLFW_RELEASE) {
-				keyState[key] = 0;
-			}
+	for (u_int key = 0; key <= KEY_LAST; key++)
+		keyState[key] = 0;
+
+	for (int i = 0; i <= GLFW_KEY_LAST; i++) {
+		const u_int key = keyMap[i];
+		if (!key)
+			continue;
+
+		const bool isDown = glfwGetKey(window, i) == GLFW_PRESS;
+		if (isDown) {
+			keyState[key] |= KEY_HOLD;
+			if (!keyWasDown[i])
+				keyState[key] |= KEY_PRESS;
 		}
+		keyWasDown[i] = isDown;
 	}
 	for (std::vector<I_Input*>::iterator iterator = callbackVector.begin(); iterator != callbackVector.end(); iterator++) {
 

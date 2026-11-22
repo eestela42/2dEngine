@@ -27,6 +27,7 @@ class InputHandler
         GLFWwindow *window;
         int keyMap[GLFW_KEY_LAST + 1] = {0};
 		u_char keyState[KEY_LAST + 1] = {0};
+		bool keyWasDown[GLFW_KEY_LAST + 1] = {false};
 		double posX, posY;
 		double scrollOffset = 0.0;
 
