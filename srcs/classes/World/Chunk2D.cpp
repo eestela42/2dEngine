@@ -33,6 +33,7 @@ void Chunk2D::deleter()
 /*
 Fill the 2D block map with a simple random stone pattern.
 The raw generated buffer is freed after the map has taken ownership of the block data.
+THIS IS SUPPOSED TO TAKE A RAW DATA ARRAY FROM THE GENERATOR, BUT FOR THIS simple 2D IMPLEMENTATION WE IGNORE IT.
 */
 void Chunk2D::privGenerate(u_char *data)
 {
