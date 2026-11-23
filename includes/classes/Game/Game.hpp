@@ -95,8 +95,15 @@ private :
 	bool modelGroundOffsetDirty = true;
 
 
-	std::mutex						vaoOperations_mutex;
-	std::deque<vao_operation>		vaoOperations;
+	std::mutex					dequeueVAO_mutex;
+	std::deque<info_VAO*>		dequeueVAO;
+
+	std::mutex					dequeueDeleteVAO_mutex;
+	std::deque<vao_delete_operation> dequeueDeleteVAO;
+
+	//HOTFIX
+	std::map<std::pair<int, int>, VAO_data> pos_to_vao;
+
 
 	std::mutex					endThreads_mutex;
 	bool 						endThreads = false;
@@ -121,9 +128,6 @@ private :
 
 	std::unordered_map<std::pair<int, int>, u_int, pair_hash> map_VAO;
 
-
-	//HOTFIX
-	std::map<std::pair<int, int>, VAO_data> pos_to_vao;
 
 	int vao_counter = 0;
 

@@ -47,6 +47,8 @@ CFLAGS = -std=c++17 -g3 -Iincludes -I$(IMGUI_DIR) -I$(IMGUI_BACKENDS) -MMD -MP
 OPENGL = -lglfw -lGL -lX11 -llmdb
 RM			=	rm -rf
 
+sanitize = -fsanitize=address -fno-omit-frame-pointer
+
 ################################################################################
 #                                 Defining colors                              #
 ################################################################################
