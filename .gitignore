@@ -8,4 +8,4 @@ imgui.ini
 .vscode
 text.txt
 Profiler.log
-objects3d/*
+object3d/big-objects-ignore/*

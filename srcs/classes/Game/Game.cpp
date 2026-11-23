@@ -143,7 +143,7 @@ Game::Game()
 	The OBJ model uses a dedicated VAO and shader.
 	It is separate from chunk VAOs because it uses one model transform rather than chunk data.
 	*/
-	model_mesh = new mesh("object3d/ship_pinnace_4k.obj");
+	model_mesh = new mesh("object3d/big-objects-ignore/ship_pinnace_4k.obj");
 	for (const mesh_material_range &range : model_mesh->materialRanges)
 	{
 		if (!range.texturePath.empty())
