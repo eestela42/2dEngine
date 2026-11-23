@@ -9,36 +9,36 @@
 #include "../../../imgui/backends/imgui_impl_glfw.h"
 #include "../../../imgui/backends/imgui_impl_opengl3.h"
 
-// namespace
-// {
-// 	class SlowBlockTimer
-// 	{
-// 	public:
-// 		explicit SlowBlockTimer(const char *name, std::size_t payloadBytes = 0)
-// 			: name(name), payloadBytes(payloadBytes), start(std::chrono::steady_clock::now())
-// 		{
-// 		}
+namespace
+{
+	class SlowBlockTimer
+	{
+	public:
+		explicit SlowBlockTimer(const char *name, std::size_t payloadBytes = 0)
+			: name(name), payloadBytes(payloadBytes), start(std::chrono::steady_clock::now())
+		{
+		}
 
-// 		~SlowBlockTimer()
-// 		{
-// 			const auto elapsed = std::chrono::steady_clock::now() - start;
-// 			if (elapsed >= std::chrono::milliseconds(50))
-// 			{
-// 				const double milliseconds =
-// 					std::chrono::duration<double, std::milli>(elapsed).count();
-// 				std::cerr << "[slow] " << name << ": " << milliseconds << " ms";
-// 				if (payloadBytes != 0)
-// 					std::cerr << " (" << payloadBytes << " bytes)";
-// 				std::cerr << '\n';
-// 			}
-// 		}
+		~SlowBlockTimer()
+		{
+			const auto elapsed = std::chrono::steady_clock::now() - start;
+			if (elapsed >= std::chrono::milliseconds(50))
+			{
+				const double milliseconds =
+					std::chrono::duration<double, std::milli>(elapsed).count();
+				std::cerr << "[slow] " << name << ": " << milliseconds << " ms";
+				if (payloadBytes != 0)
+					std::cerr << " (" << payloadBytes << " bytes)";
+				std::cerr << '\n';
+			}
+		}
 
-// 	private:
-// 		const char *name;
-// 		std::size_t payloadBytes;
-// 		std::chrono::steady_clock::time_point start;
-// 	};
-// }
+	private:
+		const char *name;
+		std::size_t payloadBytes;
+		std::chrono::steady_clock::time_point start;
+	};
+}
 
 unsigned int depthMapFBO;
 const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
@@ -278,7 +278,6 @@ void Game::Loop() {
 		glBindTexture(GL_TEXTURE_2D_ARRAY, blockTextureArray.id);
 		Shader::GetActiveShader()->SetInt("ourTextureArray", 0);
 	}
-
 	manageVAO();
 	draw();
 
@@ -437,6 +436,8 @@ void Game::manageVAO()
 	*/
 	const int maxVaoAdditionsPerFrame = 32;
 	std::deque<vao_operation> pendingOperations;
+
+
 	std::set<std::pair<int, int>> replacementsInFlight;
 	{
 		std::lock_guard<std::mutex> lock(vaoOperations_mutex);
@@ -478,6 +479,8 @@ void Game::manageVAO()
 				replacementsInFlight.emplace(operation.pos.x, operation.pos.y);
 		}
 	}
+	{
+	SlowBlockTimer timer("vao PENDING", 0);
 
 	while (!pendingOperations.empty())
 	{
@@ -531,6 +534,7 @@ void Game::manageVAO()
 
 		delete operation.info;
 		vao_counter++;
+	}
 	}
 }
 
