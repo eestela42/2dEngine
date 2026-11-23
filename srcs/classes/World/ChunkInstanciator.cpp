@@ -474,6 +474,13 @@ void ChunkInstanciator::unloadAllChunks()
 	setKeepUpdating(false);
 	_updateMutex.lock();
 
+	{
+		std::lock_guard<std::mutex> lock(to_VAO_mutex);
+		for (info_VAO *info : to_VAO)
+			delete info;
+		to_VAO.clear();
+	}
+
 	deleteAllChunks();
 	
 	_updateMutex.unlock();
