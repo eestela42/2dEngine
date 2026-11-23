@@ -2,6 +2,7 @@
 #include <classes/Game/mesh.hpp>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <iostream>
 #include "../../../imgui/imgui.h"
@@ -140,11 +141,16 @@ Game::Game()
 	The OBJ model uses a dedicated VAO and shader.
 	It is separate from chunk VAOs because it uses one model transform rather than chunk data.
 	*/
-	model_mesh = new mesh("object3d/sheep.obj");
+	model_mesh = new mesh("object3d/ship_pinnace_4k.obj");
+	for (const mesh_material_range &range : model_mesh->materialRanges)
+	{
+		if (!range.texturePath.empty())
+			modelTextureIds[range.materialName] = TextureLoader::LoadTexture(range.texturePath).id;
+	}
 	model_VAO = new VertexArrayObject(
 		new VertexBufferObject(model_mesh->dataStruct),
 		new ElementBufferObject(model_mesh->shapeAssemblyData),
-		shaderHandler->GetShader("model"));
+		shaderHandler->GetShader(model_mesh->hasTexture ? "model_texture" : "model"));
 
 }
 
@@ -156,6 +162,11 @@ Game::~Game() {
 
 	if (blockTextureArray.id)
 		glDeleteTextures(1, &blockTextureArray.id);
+	for (const auto &texture : modelTextureIds)
+	{
+		if (texture.second)
+			glDeleteTextures(1, &texture.second);
+	}
 	if (frontGroundFBO)
 		glDeleteFramebuffers(1, &frontGroundFBO);
 	if (backgroundFBO)
@@ -236,7 +247,7 @@ void Game::Loop() {
 	
 	inputHandler->HandleInput();
 	const glm::vec3 playerPosition = player->GetPosition();
-	
+	const glm::vec3 movementDirection = player->GetMovementDirection();
 
 	const glm::vec3 cameraPosition = camera->GetPosition(playerPosition);
 	const glm::mat4 view = camera->GetViewMatrix(playerPosition);
@@ -281,11 +292,14 @@ void Game::Loop() {
 	manageVAO();
 	draw();
 
-	shaderHandler->Use("model");
+	shaderHandler->Use(model_mesh->hasTexture ? "model_texture" : "model");
 	if (Shader::GetActiveShader()) {
-		// Map the model's local X-up axis to the world's Y-up axis.
+		// Preserve the current model orientation for the player's default -Z facing.
+		const float movementYaw = std::atan2(-movementDirection.x, -movementDirection.z);
 		glm::mat4 meshTransform = glm::rotate(
-			glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+			glm::mat4(1.0f), movementYaw, glm::vec3(0.0f, 1.0f, 0.0f));
+		meshTransform = glm::rotate(
+			meshTransform, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
 		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
 		meshTransform = glm::rotate(meshTransform, glm::radians(modelRotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -317,7 +331,20 @@ void Game::Loop() {
 		Shader::GetActiveShader()->Setmat4("proj", proj);
 	}
 	model_VAO->Bind();
-	glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(model_VAO->GetIndicesSize()), GL_UNSIGNED_INT, nullptr);
+	if (model_mesh->hasTexture)
+	{
+		for (const mesh_material_range &range : model_mesh->materialRanges)
+		{
+			const auto texture = modelTextureIds.find(range.materialName);
+			Shader::GetActiveShader()->SetInt("useTexture", texture != modelTextureIds.end() ? 1 : 0);
+			if (texture != modelTextureIds.end())
+				Shader::GetActiveShader()->SetTexture("ourTexture", texture->second, GL_TEXTURE0);
+			glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(range.indexCount), GL_UNSIGNED_INT,
+				(void *)(u_long)(range.indexOffset * sizeof(u_int)));
+		}
+	}
+	else
+		glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(model_VAO->GetIndicesSize()), GL_UNSIGNED_INT, nullptr);
 	model_VAO->Unbind();
 
 
@@ -553,7 +580,7 @@ void Game::manageUI()
 
 	if (ImGui::CollapsingHeader("Mesh"))
 	{
-		if (ImGui::DragFloat("Scale", &modelScale, 0.05f, 0.1f, 20.0f))
+		if (ImGui::DragFloat("Scale", &modelScale, 0.01f, 0.1f, 20.0f))
 			modelGroundOffsetDirty = true;
 		if (ImGui::DragFloat3("Rotation (degrees)", glm::value_ptr(modelRotation), 1.0f, -360.0f, 360.0f))
 			modelGroundOffsetDirty = true;

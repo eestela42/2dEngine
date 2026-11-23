@@ -41,7 +41,7 @@ void Chunk2D::privGenerate(u_char *data)
 	{
 		for (int y = 0; y < AChunk::sizeY; y++)
 		{
-			if (rand() % 100 < 20)
+			if (rand() % 100 < 5)
 				map[x + y * AChunk::sizeX] = STONE;
 		}
 	}
@@ -86,13 +86,13 @@ void Chunk2D::privCompile()
 
 	int groundStart = vertices.size();
 	vertices.push_back({glm::vec3(offset_x, offset_y, groundZ), 1,
-						uvBottomLeft, 1});
+						uvBottomLeft, WATER});
 	vertices.push_back({glm::vec3(offset_x + float(AChunk::sizeX), offset_y, groundZ), 1,
-						uvBottomRight, 1});
+						uvBottomRight, WATER});
 	vertices.push_back({glm::vec3(offset_x + float(AChunk::sizeX), offset_y + float(AChunk::sizeY), groundZ), 1,
-						uvTopRight, 1});
+						uvTopRight, WATER});
 	vertices.push_back({glm::vec3(offset_x, offset_y + float(AChunk::sizeY), groundZ), 1,
-						uvTopLeft, 1});
+						uvTopLeft, WATER});
 	indices.push_back(groundStart);
 	indices.push_back(groundStart + 1);
 	indices.push_back(groundStart + 2);

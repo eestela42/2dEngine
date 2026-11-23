@@ -20,6 +20,7 @@ public:
 	void SendInput(const InputFrame &input) override;
 	void DrawUI();
 	glm::vec3 &GetPosition();
+	glm::vec3 GetMovementDirection();
 	std::mutex &GetPositionMutex();
 
 	bool SetupChunks(std::vector<std::vector<AChunk*>> &tabChunks, std::mutex &tabChunks_mutex);
@@ -39,6 +40,7 @@ private:
 	float collisionRadius = 0.2f;
 	const glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::vec3 position = glm::vec3(0.0f);
+	glm::vec3 movementDirection = glm::vec3(0.0f, 0.0f, -1.0f);
 	std::mutex positionMutex;
 	bool autoMove = false;
 

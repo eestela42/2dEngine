@@ -74,6 +74,7 @@ void Player::SendInput(const InputFrame &input)
 		if (movementMagnitude > 0.000001f)
 		{
 			const glm::vec3 direction = movementVector / movementMagnitude;
+			movementDirection = direction;
 			const float distance = speed * speedMultiplier * movementMagnitude;
 			moveWithCollision(direction, distance);
 		}
@@ -240,6 +241,12 @@ void Player::moveWithCollision(const glm::vec3 &direction, float distance)
 glm::vec3 &Player::GetPosition()
 {
 	return position;
+}
+
+glm::vec3 Player::GetMovementDirection()
+{
+	std::lock_guard<std::mutex> lock(positionMutex);
+	return movementDirection;
 }
 
 std::mutex &Player::GetPositionMutex()

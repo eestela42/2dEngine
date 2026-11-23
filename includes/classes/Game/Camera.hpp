@@ -26,11 +26,11 @@ private:
 
 	Window *window;
 	float yaw = -90.0f;
-	float pitch = -75.0f;
+	float pitch = -42.0f;
 	const float sensitivity = 0.05f;
 	const glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::vec3 direction;
-	float focusDistance = 50.0f;
+	float focusDistance = 11.0f;
 	const float focusHeight = 1.0f;
 	glm::vec3 followPosition = glm::vec3(0.0f);
 	glm::vec3 freePosition = glm::vec3(0.0f);

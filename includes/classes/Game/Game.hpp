@@ -89,8 +89,9 @@ private :
 	void tmpuseComputeShader();
 
 	mesh *model_mesh;
-	glm::vec3 modelRotation = glm::vec3(90.0f, 0.0f, -90.0f);
-	float modelScale = 0.85f;
+	std::map<std::string, unsigned int> modelTextureIds;
+	glm::vec3 modelRotation = glm::vec3(180.f, 0.0f, -90.0f);
+	float modelScale = 0.10f;
 	float modelGroundOffset = 0.0f;
 	bool modelGroundOffsetDirty = true;
 

@@ -1,5 +1,54 @@
 #include <classes/Game/mesh.hpp>
 
+#include <algorithm>
+#include <charconv>
+#include <filesystem>
+#include <sstream>
+#include <stdexcept>
+
+namespace
+{
+	std::string trim(const std::string &value)
+	{
+		const std::size_t first = value.find_first_not_of(" \t\r\n");
+		if (first == std::string::npos)
+			return "";
+		const std::size_t last = value.find_last_not_of(" \t\r\n");
+		return value.substr(first, last - first + 1);
+	}
+
+	int resolveObjIndex(const std::string &value, std::size_t count, std::size_t lineNumber,
+		const char *kind, bool optional)
+	{
+		int index = 0;
+		const auto parsed = std::from_chars(value.data(), value.data() + value.size(), index);
+		const bool validIndex = parsed.ec == std::errc() && parsed.ptr == value.data() + value.size() && index != 0;
+		if (!validIndex)
+		{
+			if (optional)
+			{
+				std::cerr << "Ignoring invalid OBJ " << kind << " index on line " << lineNumber << std::endl;
+				return -1;
+			}
+			throw std::runtime_error("Invalid OBJ " + std::string(kind) + " index on line " + std::to_string(lineNumber));
+		}
+
+		const long long resolved = index > 0
+			? static_cast<long long>(index) - 1
+			: static_cast<long long>(count) + index;
+		if (resolved < 0 || resolved >= static_cast<long long>(count))
+		{
+			if (optional)
+			{
+				std::cerr << "Ignoring out-of-range OBJ " << kind << " index on line " << lineNumber << std::endl;
+				return -1;
+			}
+			throw std::runtime_error("OBJ " + std::string(kind) + " index out of range on line " + std::to_string(lineNumber));
+		}
+		return static_cast<int>(resolved);
+	}
+}
+
 
 mesh::~mesh()
 {}
@@ -40,117 +89,183 @@ mesh::mesh(std::string file_name)
 
 	std::cout << std::endl;
 
-	// addInfoToVertexesEco();
-	dataStruct.data = (u_char *)vertexes.data();
-	// dataStruct.size = vertexes.size() * sizeof(glm::vec3) * 2;
-	dataStruct.size = vertexes.size() * sizeof(glm::vec3);
 	for (std::size_t i = 0; i < triangles.size(); i++)
 	{
 		shapeAssemblyData.push_back(triangles[i].v[0]);
 		shapeAssemblyData.push_back(triangles[i].v[1]);
 		shapeAssemblyData.push_back(triangles[i].v[2]);
 	}
+	buildVertexData();
 }
 
 void	mesh::parseFromFile(std::string file_name)
 {
 	std::ifstream file(file_name);
-    if (!file.is_open())
-    {
-        std::cout << "Error opening file : " << file_name << std::endl;
-        exit(1);
-    }
+	if (!file.is_open())
+		throw std::runtime_error("Error opening OBJ file: " + file_name);
 
-    std::string line;
-	int count = 0;
-	try {
-  while (std::getline(file, line))
+	std::vector<std::filesystem::path> materialLibraries;
+	std::string line;
+	std::string currentMaterial;
+	std::size_t lineNumber = 0;
+	while (std::getline(file, line))
 	{
-		count++;
-		// std::cout << "line : " << count++ << std::endl;
-		if (line.size() <= 2)
+		++lineNumber;
+		std::istringstream lineStream(line);
+		std::string record;
+		if (!(lineStream >> record) || record[0] == '#')
 			continue;
-        if (line[0] == 'v' && line[1] == ' ')
-        {
-			bool point = false;
-            glm::vec3 vert;
-            std::string str[3];
-            int i = 2;
-			for (int pos = 0; pos < 3; pos++)
+
+		if (record == "v")
+		{
+			glm::vec3 vertex;
+			if (!(lineStream >> vertex.x >> vertex.y >> vertex.z))
+				throw std::runtime_error("Invalid OBJ vertex on line " + std::to_string(lineNumber));
+			base_vertexes.push_back(vertex);
+		}
+		else if (record == "vt")
+		{
+			glm::vec2 coordinate;
+			if (!(lineStream >> coordinate.x >> coordinate.y))
+				throw std::runtime_error("Invalid OBJ texture coordinate on line " + std::to_string(lineNumber));
+			base_texture_coordinates.push_back(coordinate);
+		}
+		else if (record == "f")
+		{
+			std::vector<unsigned int> face;
+			std::vector<int> faceTextureCoordinates;
+			std::string token;
+			while (lineStream >> token)
 			{
-				while (line[i] && line[i] == ' ')
-					{i++;}
-				if (line[i] && line[i] == '-')
-					str[pos] += line[i++];
-				while (line[i] && ((line[i] >= '0' && line[i] <= '9') || line[i] == '.' ))
+				if (token[0] == '#')
+					break;
+
+				const std::size_t firstSlash = token.find('/');
+				const std::size_t secondSlash = firstSlash == std::string::npos
+					? std::string::npos : token.find('/', firstSlash + 1);
+				const std::string positionIndex = token.substr(0, firstSlash);
+				const int resolvedPosition = resolveObjIndex(
+					positionIndex, base_vertexes.size(), lineNumber, "vertex", false);
+				face.push_back(static_cast<unsigned int>(resolvedPosition + 1));
+
+				int textureIndex = -1;
+				if (firstSlash != std::string::npos)
 				{
-					if (line[i] == '.')
-					{
-						if (!point)
-							point = true;
-						else
-						{
-							std::cout << "Error line " << count << " : 2 points in a number" << std::endl;
-							str[pos].clear();
-							break ;
-						}
-					}
-					str[pos] += line[i];
-					i++;
+					const std::size_t textureEnd = secondSlash == std::string::npos ? token.size() : secondSlash;
+					const std::string textureValue = token.substr(firstSlash + 1, textureEnd - firstSlash - 1);
+					if (!textureValue.empty() && !base_texture_coordinates.empty())
+						textureIndex = resolveObjIndex(
+							textureValue, base_texture_coordinates.size(), lineNumber, "texture", true);
 				}
-				point = false;
+				faceTextureCoordinates.push_back(textureIndex);
 			}
-			if (str[0].empty() || str[0] == "." || str[1].empty() || str[1] == "." || str[2].empty() || str[2] == ".")
+
+			if (face.size() >= 3)
 			{
-				std::cout << "Error line " << count << " : missing number" << std::endl;
-			}
-			else 
-			{
-				for (int pos = 0; pos < 3; pos++)
-					vert[pos] = std::stof(str[pos]);
-				this->base_vertexes.push_back(vert);
-			}
-            str[0].clear();
-			str[1].clear();
-			str[2].clear();
-			
-			
-        }
-        else if (line[0] == 'f' && line[1] == ' ')
-        {
-			// std::cout << "line : " << line << std::endl;
-			std::vector<unsigned int>face;
-			int i = 2;
-			while(line[i] && line[i] == ' '){i++;}
-			// for(int num = 0; line[i] && num < 3; num++)
-			while (line[i])
-			{
-				std::string tmp;
-				while(line[i] && line[i] <= '9' && line[i] >= '0')
-				{
-					tmp += line[i];
-					i++;
-				}
-				if (!tmp.empty())
-					face.push_back(std::stoi(tmp));
-				while(line[i] && line[i] != ' '){i++;}
-				while(line[i] && line[i] == ' '){i++;}
-			}
-			if (face.size() < 3)
-			{
-				std::cout << "Error line " << count << " : face with less than 3 vertexes" << std::endl;
+				base_faces.push_back(face);
+				base_face_texture_coordinates.push_back(faceTextureCoordinates);
+				base_face_materials.push_back(currentMaterial);
 			}
 			else
-				this->base_faces.push_back(face);
+				std::cerr << "Ignoring OBJ face with fewer than three vertices on line " << lineNumber << std::endl;
+		}
+		else if (record == "usemtl")
+		{
+			std::getline(lineStream, currentMaterial);
+			currentMaterial = trim(currentMaterial);
+			const std::size_t commentPosition = currentMaterial.find(" #");
+			if (commentPosition != std::string::npos)
+				currentMaterial = trim(currentMaterial.substr(0, commentPosition));
+		}
+		else if (record == "mtllib")
+		{
+			std::string materialName;
+			while (lineStream >> materialName && materialName[0] != '#')
+				materialLibraries.push_back(std::filesystem::path(materialName));
 		}
 	}
-	}
-	catch(const std::exception& e) {
-			std::cout << " a standard exception was caught, with message: '"
-                  << e.what() << "'\n";
+
+	for (const std::vector<int> &faceCoordinates : base_face_texture_coordinates)
+	{
+		if (std::any_of(faceCoordinates.begin(), faceCoordinates.end(), [](int index) { return index >= 0; }))
+		{
+			hasTextureCoordinates = true;
+			break;
+		}
 	}
 
-    file.close();
+	if (!hasTextureCoordinates)
+		return;
+
+	const std::filesystem::path objPath(file_name);
+	for (const std::filesystem::path &libraryName : materialLibraries)
+	{
+		const std::filesystem::path materialPath = (objPath.parent_path() / libraryName).lexically_normal();
+		std::ifstream materialFile(materialPath);
+		if (!materialFile.is_open())
+		{
+			std::cerr << "Unable to open MTL file " << materialPath << "; mesh will remain untextured" << std::endl;
+			continue;
+		}
+
+		std::string materialLine;
+		std::string currentMaterialName;
+		while (std::getline(materialFile, materialLine))
+		{
+			std::istringstream materialStream(materialLine);
+			std::string record;
+			if (!(materialStream >> record))
+				continue;
+
+			if (record == "newmtl")
+			{
+				std::getline(materialStream, currentMaterialName);
+				currentMaterialName = trim(currentMaterialName);
+				const std::size_t commentPosition = currentMaterialName.find(" #");
+				if (commentPosition != std::string::npos)
+					currentMaterialName = trim(currentMaterialName.substr(0, commentPosition));
+				continue;
+			}
+			if (record != "map_Kd" || currentMaterialName.empty())
+				continue;
+
+			std::string textureName;
+			std::getline(materialStream, textureName);
+			textureName = trim(textureName);
+			const std::size_t commentPosition = textureName.find(" #");
+			if (commentPosition != std::string::npos)
+				textureName = trim(textureName.substr(0, commentPosition));
+			if (textureName.empty())
+				continue;
+
+			std::filesystem::path textureCandidate = materialPath.parent_path() / textureName;
+			if (!std::filesystem::is_regular_file(textureCandidate))
+			{
+				std::istringstream optionStream(textureName);
+				std::string option;
+				while (optionStream >> option)
+					textureCandidate = materialPath.parent_path() / option;
+			}
+			if (std::filesystem::is_regular_file(textureCandidate))
+			{
+				materialTexturePaths[currentMaterialName] = textureCandidate.lexically_normal().string();
+				continue;
+			}
+			std::cerr << "Unable to open diffuse texture " << textureName << " for material "
+				<< currentMaterialName << std::endl;
+		}
+	}
+
+	for (const std::string &materialName : base_face_materials)
+	{
+		const auto texture = materialTexturePaths.find(materialName);
+		if (texture != materialTexturePaths.end())
+		{
+			texturePath = texture->second;
+			break;
+		}
+	}
+	hasTexture = hasTextureCoordinates && !texturePath.empty();
 }
 
 
@@ -261,67 +376,132 @@ void mesh::addInfoToVertexesDup()
 
 void mesh::EcoDupVertex()
 {
-	std::vector<glm::vec3> new_vertexes/* = this->base_vertexes*/;
-	std::vector<t_triangle> new_triangles;
-
-	int i = 0;
-	for (std::vector<std::vector<unsigned int>>::iterator it = this->base_faces.begin(); it != this->base_faces.end(); ++it)
+	materialRanges.clear();
+	if (!hasTexture)
 	{
-		//barre de prog
-		// std::cout << "face : " << i << " / " << this->base_faces.size() << " = " << ((float)i / (float)this->base_faces.size()) * 100 << "%"<< std::endl;
-		
-		
-		//Check face  >3 vertexes
-		if (it->size() < 3)
-		{
-			std::cout << "Error : face with less than 3 vertexes" << std::endl;
-			exit(1);
-		}
+		std::vector<glm::vec3> new_vertexes;
+		std::vector<t_triangle> new_triangles;
+		vertByFace.clear();
+		base_triangles.clear();
 
-		//create triangle from the face
-		std::vector<t_triangle> base_face_triangles;
-		base_face_triangles = createTriangleFromFace(*it);
-
-		//create triangles with shared vertexes by face
-		std::vector<t_triangle>	new_face_triangles;
-		int j = 0;
-		for (std::vector<t_triangle>::iterator it2 = base_face_triangles.begin(); it2 != base_face_triangles.end(); ++it2)
+		for (const std::vector<unsigned int> &face : base_faces)
 		{
-			new_face_triangles.push_back(getSemioptiVerticesTriangle(*it2, j, &new_vertexes, &base_face_triangles, &new_face_triangles));
-			j++;
-		}
-
-		// get all vertexes of the face
-		std::vector<unsigned int> tmp;
-		for (std::size_t y = 0; y < new_face_triangles.size(); y++)
-		{
-			new_triangles.push_back(new_face_triangles[y]);
-			for(int z = 0; z < 3; z++)
+			std::vector<t_triangle> baseFaceTriangles = createTriangleFromFace(face);
+			std::vector<t_triangle> newFaceTriangles;
+			for (std::size_t i = 0; i < baseFaceTriangles.size(); ++i)
 			{
-				bool to_push = true;
-				for (std::size_t x = 0; x < tmp.size(); x++)
-				{
-					if (tmp[x] == new_face_triangles[y].v[z])
-					{
-						to_push = false;
-						break;
-					}
-				}
-				if (to_push)
-					tmp.push_back(new_face_triangles[y].v[z]);
+				newFaceTriangles.push_back(getSemioptiVerticesTriangle(
+					baseFaceTriangles[i], i, &new_vertexes, &baseFaceTriangles, &newFaceTriangles));
 			}
+
+			std::vector<unsigned int> faceVertices;
+			for (const t_triangle &triangle : newFaceTriangles)
+			{
+				new_triangles.push_back(triangle);
+				for (int corner = 0; corner < 3; ++corner)
+				{
+					if (std::find(faceVertices.begin(), faceVertices.end(), triangle.v[corner]) == faceVertices.end())
+						faceVertices.push_back(triangle.v[corner]);
+				}
+			}
+			vertByFace.push_back(faceVertices);
+			base_triangles.push_back(baseFaceTriangles);
 		}
 
-		
-		this->vertByFace.push_back(tmp);
-		base_triangles.push_back(base_face_triangles);
-
-		i++;
+		triangles = new_triangles;
+		vertexes = new_vertexes;
+		textureCoordinates.clear();
+		return;
 	}
-	
+
+	std::vector<glm::vec3> new_vertexes;
+	std::vector<glm::vec2> new_texture_coordinates;
+	std::vector<t_triangle> new_triangles;
+	vertByFace.clear();
+	base_triangles.clear();
+
+	std::vector<std::string> materialOrder;
+	std::map<std::string, std::vector<std::size_t>> facesByMaterial;
+	for (std::size_t faceIndex = 0; faceIndex < base_faces.size(); ++faceIndex)
+	{
+		const std::string materialName = faceIndex < base_face_materials.size()
+			? base_face_materials[faceIndex] : "";
+		if (facesByMaterial.find(materialName) == facesByMaterial.end())
+			materialOrder.push_back(materialName);
+		facesByMaterial[materialName].push_back(faceIndex);
+	}
+
+	for (const std::string &materialName : materialOrder)
+	{
+		mesh_material_range range;
+		range.materialName = materialName;
+		range.indexOffset = new_triangles.size() * 3;
+		const auto texture = materialTexturePaths.find(materialName);
+		if (texture != materialTexturePaths.end())
+			range.texturePath = texture->second;
+
+		for (std::size_t faceIndex : facesByMaterial[materialName])
+		{
+			const std::vector<unsigned int> &face = base_faces[faceIndex];
+			const std::vector<int> &faceTextureCoordinates = base_face_texture_coordinates[faceIndex];
+			if (face.size() < 3)
+				continue;
+
+			base_triangles.push_back(createTriangleFromFace(face));
+			std::vector<unsigned int> faceVertices;
+			for (std::size_t corner = 2; corner < face.size(); ++corner)
+			{
+				const std::size_t corners[] = {0, corner - 1, corner};
+				t_triangle triangle;
+				for (std::size_t triangleCorner = 0; triangleCorner < 3; ++triangleCorner)
+				{
+					const std::size_t faceCorner = corners[triangleCorner];
+					triangle.v[triangleCorner] = static_cast<unsigned int>(new_vertexes.size());
+					new_vertexes.push_back(base_vertexes[face[faceCorner] - 1]);
+					faceVertices.push_back(triangle.v[triangleCorner]);
+					const int textureIndex = faceCorner < faceTextureCoordinates.size()
+						? faceTextureCoordinates[faceCorner] : -1;
+					new_texture_coordinates.push_back(textureIndex >= 0
+						? base_texture_coordinates[textureIndex] : glm::vec2(0.0f));
+				}
+				new_triangles.push_back(triangle);
+			}
+			vertByFace.push_back(faceVertices);
+		}
+
+		range.indexCount = new_triangles.size() * 3 - range.indexOffset;
+		if (range.indexCount != 0)
+			materialRanges.push_back(range);
+	}
 
 	this->triangles = new_triangles;
 	this->vertexes = new_vertexes;
+	this->textureCoordinates = new_texture_coordinates;
+}
+
+void mesh::buildVertexData()
+{
+	if (hasTexture)
+	{
+		texturedVertexData.clear();
+		texturedVertexData.reserve(vertexes.size() * 5);
+		for (std::size_t i = 0; i < vertexes.size(); ++i)
+		{
+			texturedVertexData.push_back(vertexes[i].x);
+			texturedVertexData.push_back(vertexes[i].y);
+			texturedVertexData.push_back(vertexes[i].z);
+			texturedVertexData.push_back(textureCoordinates[i].x);
+			texturedVertexData.push_back(textureCoordinates[i].y);
+		}
+		dataStruct.data = reinterpret_cast<u_char *>(texturedVertexData.data());
+		dataStruct.size = texturedVertexData.size() * sizeof(float);
+	}
+	else
+	{
+		texturedVertexData.clear();
+		dataStruct.data = reinterpret_cast<u_char *>(vertexes.data());
+		dataStruct.size = vertexes.size() * sizeof(glm::vec3);
+	}
 }
 
 t_triangle mesh::getSemioptiVerticesTriangle(t_triangle &triangle, std::size_t pos, std::vector<glm::vec3> *new_vertexes,
@@ -451,8 +631,21 @@ void	mesh::center_around_orgin()
 mesh &mesh::operator=(const mesh &copy)
 {
 	this->base_vertexes = copy.base_vertexes;
+	this->base_texture_coordinates = copy.base_texture_coordinates;
 	this->base_faces = copy.base_faces;
+	this->base_face_texture_coordinates = copy.base_face_texture_coordinates;
+	this->base_face_materials = copy.base_face_materials;
 	this->vertexes = copy.vertexes;
+	this->textureCoordinates = copy.textureCoordinates;
 	this->triangles = copy.triangles;
+	this->base_triangles = copy.base_triangles;
+	this->vertByFace = copy.vertByFace;
+	this->shapeAssemblyData = copy.shapeAssemblyData;
+	this->texturePath = copy.texturePath;
+	this->materialTexturePaths = copy.materialTexturePaths;
+	this->materialRanges = copy.materialRanges;
+	this->hasTextureCoordinates = copy.hasTextureCoordinates;
+	this->hasTexture = copy.hasTexture;
+	buildVertexData();
 	return (*this);
 }
