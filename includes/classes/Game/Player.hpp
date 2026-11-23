@@ -19,6 +19,7 @@ public:
 
 	void SendInput(const InputFrame &input) override;
 	void DrawUI();
+	void TriggerExplosion();
 	glm::vec3 &GetPosition();
 	glm::vec3 GetMovementDirection();
 	std::mutex &GetPositionMutex();
@@ -26,6 +27,7 @@ public:
 	bool SetupChunks(std::vector<std::vector<AChunk*>> &tabChunks, std::mutex &tabChunks_mutex);
 
 private:
+	void explodeAtPosition();
 	bool isBlockFilled(int blockX, int blockZ, int blockHeight) const;
 	bool findBlockingNormal(
 		const glm::vec3 &center,

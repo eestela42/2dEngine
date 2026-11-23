@@ -56,6 +56,8 @@ It also adds a separate ground quad below the block faces.
 */
 void Chunk2D::privCompile()
 {
+	vertices.clear();
+	indices.clear();
 	u_char *blocks = getData();
 	glm::ivec2 pos = getPos();
 	int offset_x = pos.x * AChunk::sizeX;
@@ -103,12 +105,19 @@ void Chunk2D::privCompile()
 }
 
 /*
-Changing blocks is not implemented for this simple 2D chunk representation.
-Return false so callers know no block was modified.
+Change one block in the 2D map and report whether its value changed.
 */
 bool Chunk2D::privChangeBlock(int x, int y, int z, u_char type)
 {
-	return false;
+	if (x < 0 || x >= static_cast<int>(AChunk::sizeX)
+		|| y < 0 || y >= static_cast<int>(AChunk::sizeY))
+		return false;
+
+	u_char &block = map[x + y * AChunk::sizeX];
+	if (block == type)
+		return false;
+	block = type;
+	return true;
 }
 
 /*
@@ -137,15 +146,21 @@ It is kept in the interface so callers can use the same chunk API for 2D and 3D 
 */
 bool						Chunk2D::privIsFilled(int x, int y, int z)
 {
+	if (x < 0 || x >= static_cast<int>(AChunk::sizeX)
+		|| y < 0 || y >= static_cast<int>(AChunk::sizeY))
+		return false;
 	return map[x + y * sizeX] != 0;
 }
 
 /*
-Return a placeholder block type for all positions in this 2D implementation.
+Return the block type at the requested horizontal map position.
 */
 u_char						Chunk2D::privBlockType(int x, int y, int z)
 {
-	return 1;
+	if (x < 0 || x >= static_cast<int>(AChunk::sizeX)
+		|| y < 0 || y >= static_cast<int>(AChunk::sizeY))
+		return AIR;
+	return map[x + y * AChunk::sizeX];
 }
 
 

@@ -32,8 +32,13 @@ class ChunkInstanciator
 	std::mutex 							&realPlayerPos_mutex;
 	glm::vec3 							&realPlayerPos;
 
-	std::mutex 							&vaoOperations_mutex;
-	std::deque<vao_operation> 			&vaoOperations;
+
+	std::mutex 							&to_VAO_mutex;
+	std::deque<info_VAO*> 				&to_VAO;
+
+	std::mutex 							&toDeleteVAO_mutex;
+	std::deque<vao_delete_operation> 	&toDeleteVAO;
+	std::uint64_t						vaoOperationSequence = 0;
 
 	std::mutex 							&endThread_mutex;
 	bool 								&endThread;
@@ -83,7 +88,14 @@ class ChunkInstanciator
 
 	ChunkInstanciator(u_int renderDistance,
 						glm::vec3 &playerPos, std::mutex &playerPos_mutex,
-						std::deque<vao_operation> &vaoOperations, std::mutex &vaoOperations_mutex,
+						// std::deque<vao_operation> &vaoAddOperations,
+						// std::deque<vao_operation> &vaoRemoveOperations,
+						// std::uint64_t &vaoOperationSequence,
+						// std::mutex &vaoOperations_mutex,
+						std::deque<info_VAO*> &to_VAO,
+						std::mutex &to_VAO_mutex,
+						std::deque<vao_delete_operation> &toDeleteVAO,
+						std::mutex &toDeleteVAO_mutex,
 						bool &windoeShouldClose, std::mutex &windowShouldClose_mutex,
 						bool& casse_block,
 						int &displayDistance);

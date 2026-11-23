@@ -6,8 +6,8 @@ ElementBufferObject::ElementBufferObject(const std::vector<unsigned int>& indice
 	indicesSize = indices.size();
     indicesDataSize = indicesSize * sizeof(indices[0]);
     glGenBuffers(1, &index);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indicesDataSize, indices.data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, index);
+	glBufferData(GL_ARRAY_BUFFER, indicesDataSize, indices.data(), GL_STATIC_DRAW);
 }
 
 void ElementBufferObject::Bind() {

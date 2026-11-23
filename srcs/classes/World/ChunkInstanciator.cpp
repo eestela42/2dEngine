@@ -4,13 +4,15 @@
 
 ChunkInstanciator::ChunkInstanciator(u_int renderDistance,
 										glm::vec3 &playerPos,					std::mutex &playerPos_mutex,
-										std::deque<vao_operation> &vaoOperations, std::mutex &vaoOperations_mutex,
+										std::deque<info_VAO*> &to_VAO, 			std::mutex &to_VAO_mutex,
+										std::deque<vao_delete_operation> &toDeleteVAO, 	std::mutex &toDeleteVAO_mutex,
 										bool &endThread, 						std::mutex &endThread_mutex,
 										bool& casse_block,
 										int &displayDistance)
 	: renderDistance(renderDistance),
 		realPlayerPos(playerPos), realPlayerPos_mutex(playerPos_mutex),
-		vaoOperations(vaoOperations), vaoOperations_mutex(vaoOperations_mutex),
+		to_VAO(to_VAO), to_VAO_mutex(to_VAO_mutex),
+		toDeleteVAO(toDeleteVAO), toDeleteVAO_mutex(toDeleteVAO_mutex),
 		endThread(endThread), endThread_mutex(endThread_mutex),
 		casse_block(casse_block),
 		displayDistance(displayDistance)
@@ -70,6 +72,7 @@ bool ChunkInstanciator::compileChunksWithNeighbours(AChunk *chunk, s_neighbours 
 	if (!chunk) //not supposed to happen curently
 		return false;
 	glm::ivec2 chunkPos = chunk->getPos();
+	const bool replacingCompiledChunk = chunk->getIsCompiled();
 
 	if (!neighbours.north || !neighbours.south || !neighbours.east || !neighbours.west
 		|| !neighbours.north->getIsGeneratedMutex() || !neighbours.south->getIsGeneratedMutex()
@@ -82,20 +85,32 @@ bool ChunkInstanciator::compileChunksWithNeighbours(AChunk *chunk, s_neighbours 
 
 	chunk->pubCompile();
 
-	info_VAO *info = new info_VAO();
-	t_vbo_data vertices = chunk->pubGetPtrVertices();
-	info->vertices.resize(vertices.size);
+	const t_vbo_data vertexData = chunk->pubGetPtrVertices();
+	std::vector<unsigned int> *indices = chunk->pubGetPtrIndices();
+	if ((vertexData.size != 0 && !vertexData.data) || !indices)
+		return false;
 
-	if (!info->vertices.empty())
-		std::memcpy(info->vertices.data(), vertices.data, vertices.size);
+	std::unique_ptr<info_VAO> info = std::make_unique<info_VAO>();
+	if (vertexData.size != 0)
+	{
+		info->vertices.resize(vertexData.size);
+		std::memcpy(info->vertices.data(), vertexData.data, vertexData.size);
+	}
+	info->indices = *indices;
+	info->pos = chunkPos;
 
-	info->indices = *chunk->pubGetPtrIndices();
-	info->pos = chunk->getPos();
+	{
+		std::lock_guard<std::mutex> lock(to_VAO_mutex);
+		info->sequence = ++vaoOperationSequence;
+		if (replacingCompiledChunk)
+			to_VAO.push_front(info.get());
+		else
+			to_VAO.push_back(info.get());
+	}
+	info.release();
 
-	vaoOperations_mutex.lock();
-	vaoOperations.push_back({vao_operation::Type::Add, info, info->pos});
-	vaoOperations_mutex.unlock();
-
+	chunk->setIsCompiled(true);
+	chunk->setToUpdate(false);
 
 	return true;
 
@@ -183,15 +198,15 @@ int ChunkInstanciator::getNextPos(glm::ivec2 &pos)
 
 void ChunkInstanciator::deleteBadChunk(glm::ivec2 chunkTabPos)
 {
-	/*
-	If a chunk is displayed, then we need to remove it from the GPU
-	*/
 	if (tabChunks[chunkTabPos.x][chunkTabPos.y]->getIsCompiled())
 	{
-		vaoOperations_mutex.lock();
-		vaoOperations.push_back({vao_operation::Type::Remove, NULL,
-								tabChunks[chunkTabPos.x][chunkTabPos.y]->getPos()});
-		vaoOperations_mutex.unlock();
+		{
+			std::lock_guard<std::mutex> lock(toDeleteVAO_mutex);
+			toDeleteVAO.push_back({
+				tabChunks[chunkTabPos.x][chunkTabPos.y]->getPos(),
+				++vaoOperationSequence
+			});
+		}
 
 		tabChunks[chunkTabPos.x][chunkTabPos.y]->setIsCompiled(false);
 	}
@@ -260,9 +275,10 @@ void ChunkInstanciator::updateChunk(glm::ivec2 chunkWorldPos, glm::ivec2 chunkTa
 
 	if (to_delete && chunk->getIsCompiled())
 	{
-		vaoOperations_mutex.lock();
-		vaoOperations.push_back({vao_operation::Type::Remove, NULL, chunk->getPos()});
-		vaoOperations_mutex.unlock();
+		{
+			std::lock_guard<std::mutex> lock(toDeleteVAO_mutex);
+			toDeleteVAO.push_back({chunk->getPos(), ++vaoOperationSequence});
+		}
 
 		chunk->setIsCompiled(false);
 	}
@@ -272,16 +288,6 @@ void ChunkInstanciator::updateChunk(glm::ivec2 chunkWorldPos, glm::ivec2 chunkTa
 	}
 	else if (!to_delete && chunk->getToUpdate())
 	{
-		if (chunk->getIsCompiled())
-		{
-			vaoOperations_mutex.lock();
-			vaoOperations.push_back({vao_operation::Type::Remove, NULL, chunk->getPos()});
-			vaoOperations_mutex.unlock();
-			chunk->setIsCompiled(false);
-		}
-
-		chunk->setToUpdate(false);
-
 		compileChunksWithNeighbours(chunk, getNeighbours(chunkTabPos, chunkWorldPos));
 
 	}
@@ -404,17 +410,6 @@ void ChunkInstanciator::update()
 void ChunkInstanciator::deleteAllChunks()
 {
 	displayDistance = 0;
-	vaoOperations_mutex.lock();
-	std::deque<vao_operation> pendingRemovals;
-	for (const vao_operation &operation : vaoOperations)
-	{
-		if (operation.type == vao_operation::Type::Add)
-			delete operation.info;
-		else
-			pendingRemovals.push_back(operation);
-	}
-	vaoOperations.swap(pendingRemovals);
-	vaoOperations_mutex.unlock();
 
 	for (int i = 0; i < tabChunks.size(); i++)
 	{
@@ -479,9 +474,17 @@ void ChunkInstanciator::unloadAllChunks()
 	setKeepUpdating(false);
 	_updateMutex.lock();
 
+	{
+		std::lock_guard<std::mutex> lock(to_VAO_mutex);
+		for (info_VAO *info : to_VAO)
+			delete info;
+		to_VAO.clear();
+	}
+
 	deleteAllChunks();
 	
 	_updateMutex.unlock();
+
 	setKeepUpdating(true);
 }
 

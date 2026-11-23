@@ -3,6 +3,7 @@
 
 #include <glm/glm.hpp>
 #include <vector>
+#include <cstdint>
 
 struct Vertex
 {
@@ -29,25 +30,20 @@ struct info_VAO
 	std::vector<unsigned char>	vertices;
 	std::vector<unsigned int>	indices;
 	glm::ivec2 					pos;
+	std::uint64_t				sequence;
 };
 
-struct vao_operation
+struct vao_delete_operation
 {
-	enum class Type
-	{
-		Add,
-		Remove
-	};
-
-	Type		type;
-	info_VAO	*info;
-	glm::ivec2	pos;
+	glm::ivec2		pos;
+	std::uint64_t	sequence;
 };
+
 
 struct VAO_data
 {
 	u_int 						VAO;
+	std::uint64_t				sequence;
 };
-
 
 #endif

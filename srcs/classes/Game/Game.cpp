@@ -5,40 +5,41 @@
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include "../../../imgui/imgui.h"
 #include "../../../imgui/backends/imgui_impl_glfw.h"
 #include "../../../imgui/backends/imgui_impl_opengl3.h"
 
-// namespace
-// {
-// 	class SlowBlockTimer
-// 	{
-// 	public:
-// 		explicit SlowBlockTimer(const char *name, std::size_t payloadBytes = 0)
-// 			: name(name), payloadBytes(payloadBytes), start(std::chrono::steady_clock::now())
-// 		{
-// 		}
+namespace
+{
+	class SlowBlockTimer
+	{
+	public:
+		explicit SlowBlockTimer(const char *name, std::size_t payloadBytes = 0)
+			: name(name), payloadBytes(payloadBytes), start(std::chrono::steady_clock::now())
+		{
+		}
 
-// 		~SlowBlockTimer()
-// 		{
-// 			const auto elapsed = std::chrono::steady_clock::now() - start;
-// 			if (elapsed >= std::chrono::milliseconds(50))
-// 			{
-// 				const double milliseconds =
-// 					std::chrono::duration<double, std::milli>(elapsed).count();
-// 				std::cerr << "[slow] " << name << ": " << milliseconds << " ms";
-// 				if (payloadBytes != 0)
-// 					std::cerr << " (" << payloadBytes << " bytes)";
-// 				std::cerr << '\n';
-// 			}
-// 		}
+		~SlowBlockTimer()
+		{
+			const auto elapsed = std::chrono::steady_clock::now() - start;
+			if (elapsed >= std::chrono::milliseconds(50))
+			{
+				const double milliseconds =
+					std::chrono::duration<double, std::milli>(elapsed).count();
+				std::cerr << "[slow] " << name << ": " << milliseconds << " ms";
+				if (payloadBytes != 0)
+					std::cerr << " (" << payloadBytes << " bytes)";
+				std::cerr << '\n';
+			}
+		}
 
-// 	private:
-// 		const char *name;
-// 		std::size_t payloadBytes;
-// 		std::chrono::steady_clock::time_point start;
-// 	};
-// }
+	private:
+		const char *name;
+		std::size_t payloadBytes;
+		std::chrono::steady_clock::time_point start;
+	};
+}
 
 unsigned int depthMapFBO;
 const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
@@ -101,7 +102,8 @@ Game::Game()
 	without directly modifying OpenGL objects from the worker thread.
 	*/
 	chunkInstanciator = new ChunkInstanciator(renderDistance, player->GetPosition(), player->GetPositionMutex(),
-													vaoOperations, vaoOperations_mutex,
+													dequeueVAO, dequeueVAO_mutex,
+													dequeueDeleteVAO, dequeueDeleteVAO_mutex,
 													endThreads, endThreads_mutex,
 													casse_block,
 													displayDistance);
@@ -182,8 +184,8 @@ Game::~Game() {
 	delete model_VAO;
 	delete model_mesh;
 	delete skyBox;
-	delete vertexArrayObjectHandler;
 	delete chunkInstanciator;
+	delete vertexArrayObjectHandler;
 	delete player;
 	delete camera;
 	delete inputHandler;
@@ -288,7 +290,6 @@ void Game::Loop() {
 		glBindTexture(GL_TEXTURE_2D_ARRAY, blockTextureArray.id);
 		Shader::GetActiveShader()->SetInt("ourTextureArray", 0);
 	}
-
 	manageVAO();
 	draw();
 
@@ -457,79 +458,138 @@ void Game::manageVaoEntity()
 
 void Game::manageVAO()
 {
-	/*
-	VAO operations are queued by the chunk worker because OpenGL objects must be
-	created and destroyed on the thread that owns the OpenGL context.
-	*/
-	const int maxVaoAdditionsPerFrame = 2;
-	std::deque<vao_operation> pendingOperations;
+	const std::size_t maxVaoDeletionsPerFrame = 128;
+	const std::size_t maxVaoAdditionsPerFrame = 32;
+	std::deque<vao_delete_operation> pendingDeletions;
+	std::deque<info_VAO*> pendingAdditions;
+	std::map<std::pair<int, int>, std::uint64_t> deletionSequences;
 	{
-		std::lock_guard<std::mutex> lock(vaoOperations_mutex);
-		int additionsThisFrame = 0;
-		while (!vaoOperations.empty())
-		{
-			if (vaoOperations.front().type == vao_operation::Type::Add
-				&& additionsThisFrame >= maxVaoAdditionsPerFrame)
-				break;
+		std::unique_lock<std::mutex> deletionsLock(dequeueDeleteVAO_mutex, std::defer_lock);
+		std::unique_lock<std::mutex> additionsLock(dequeueVAO_mutex, std::defer_lock);
+		std::lock(deletionsLock, additionsLock);
 
-			if (vaoOperations.front().type == vao_operation::Type::Add)
-				++additionsThisFrame;
-			pendingOperations.push_back(vaoOperations.front());
-			vaoOperations.pop_front();
+		for (std::size_t i = 0;
+			i < maxVaoDeletionsPerFrame && !dequeueDeleteVAO.empty();
+			++i)
+		{
+			pendingDeletions.push_back(dequeueDeleteVAO.front());
+			dequeueDeleteVAO.pop_front();
+		}
+
+		for (const vao_delete_operation &deletion : pendingDeletions)
+		{
+			const std::pair<int, int> pos(deletion.pos.x, deletion.pos.y);
+			auto latest = deletionSequences.find(pos);
+			if (latest == deletionSequences.end() || latest->second < deletion.sequence)
+				deletionSequences[pos] = deletion.sequence;
+		}
+
+		for (auto addition = dequeueVAO.begin(); addition != dequeueVAO.end();)
+		{
+			if (!*addition)
+			{
+				addition = dequeueVAO.erase(addition);
+				continue;
+			}
+
+			const std::pair<int, int> pos((*addition)->pos.x, (*addition)->pos.y);
+			auto deletion = deletionSequences.find(pos);
+			if (deletion != deletionSequences.end()
+				&& deletion->second > (*addition)->sequence)
+			{
+				delete *addition;
+				addition = dequeueVAO.erase(addition);
+			}
+			else
+			{
+				++addition;
+			}
+		}
+
+		for (std::size_t i = 0;
+			i < maxVaoAdditionsPerFrame && !dequeueVAO.empty();
+			++i)
+		{
+			pendingAdditions.push_back(dequeueVAO.front());
+			dequeueVAO.pop_front();
 		}
 	}
 
-	while (!pendingOperations.empty())
+	int deletions = 0;
+	while (!pendingDeletions.empty())
 	{
-		vao_operation operation = pendingOperations.front();
-		pendingOperations.pop_front();
-		std::pair<int, int> pos = std::make_pair(operation.pos.x, operation.pos.y);
+		const vao_delete_operation deletion = pendingDeletions.front();
+		pendingDeletions.pop_front();
+		const std::pair<int, int> pos(deletion.pos.x, deletion.pos.y);
 		auto existing = pos_to_vao.find(pos);
-
-		if (operation.type == vao_operation::Type::Remove)
-		{
-			if (existing != pos_to_vao.end())
-			{
-				vertexArrayObjectHandler->RemoveVAO(existing->second.VAO);
-				pos_to_vao.erase(existing);
-				vao_counter--;
-			}
-			continue;
-		}
-
-		/*
-		A chunk update replaces the existing mesh for that position rather than
-		adding a duplicate VAO, so remove the old GPU object before installing the new one.
-		*/
-		if (existing != pos_to_vao.end())
+		if (existing != pos_to_vao.end()
+			&& deletion.sequence > existing->second.sequence)
 		{
 			vertexArrayObjectHandler->RemoveVAO(existing->second.VAO);
 			pos_to_vao.erase(existing);
-			vao_counter--;
+			++deletions;
+		}
+	}
+	vao_counter -= deletions;
+
+	int additions = 0;
+	while (!pendingAdditions.empty())
+	{
+		std::unique_ptr<info_VAO> info(pendingAdditions.front());
+		pendingAdditions.pop_front();
+		if (!info)
+			continue;
+
+		const std::pair<int, int> pos(info->pos.x, info->pos.y);
+		auto existing = pos_to_vao.find(pos);
+		if (existing != pos_to_vao.end()
+			&& existing->second.sequence >= info->sequence)
+			continue;
+
+		auto pendingDeletion = deletionSequences.find(pos);
+		if (pendingDeletion != deletionSequences.end()
+			&& pendingDeletion->second > info->sequence)
+			continue;
+
+		{
+			std::lock_guard<std::mutex> lock(dequeueDeleteVAO_mutex);
+			const bool isPendingDeletion = std::any_of(
+				dequeueDeleteVAO.begin(),
+				dequeueDeleteVAO.end(),
+				[&info](const vao_delete_operation &deletion)
+				{
+					return deletion.pos.x == info->pos.x
+						&& deletion.pos.y == info->pos.y
+						&& deletion.sequence > info->sequence;
+				});
+			if (isPendingDeletion)
+				continue;
 		}
 
-		t_vertexData dataStruct = {operation.info->vertices.data(), operation.info->vertices.size()};
-		const std::size_t indexDataSize =
-			operation.info->indices.size() * sizeof(unsigned int);
-
-		VertexBufferObject *vertexBuffer;
-		vertexBuffer = new VertexBufferObject(dataStruct);
-
-		ElementBufferObject *elementBuffer;
-		elementBuffer = new ElementBufferObject(operation.info->indices);
-
-		VertexArrayObject *VAO;
-		VAO = new VertexArrayObject(
-			vertexBuffer,
-			elementBuffer,
+		t_vertexData dataStruct = {
+			info->vertices.empty() ? nullptr : info->vertices.data(),
+			info->vertices.size()
+		};
+		VertexArrayObject *VAO = new VertexArrayObject(
+			new VertexBufferObject(dataStruct),
+			new ElementBufferObject(info->indices),
 			shaderHandler->GetShader("default_texture"));
+		const u_int VAO_id = vertexArrayObjectHandler->AddVAO(VAO);
 
-		u_int VAO_id = vertexArrayObjectHandler->AddVAO(VAO);
-		pos_to_vao.insert({pos, {VAO_id}});
-
-		delete operation.info;
-		vao_counter++;
+		existing = pos_to_vao.find(pos);
+		if (existing != pos_to_vao.end())
+		{
+			const u_int oldVAO = existing->second.VAO;
+			existing->second = {VAO_id, info->sequence};
+			vertexArrayObjectHandler->RemoveVAO(oldVAO);
+		}
+		else
+		{
+			pos_to_vao.emplace(pos, VAO_data{VAO_id, info->sequence});
+			++additions;
+		}
 	}
+	vao_counter += additions;
 }
 
 void Game::manageUI()
@@ -551,6 +611,7 @@ void Game::manageUI()
 	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", cameraPosition.x, cameraPosition.y, cameraPosition.z);
 	ImGui::Text("Seed: %ld", chunkInstanciator->getCurrentSeed());
 	ImGui::Text("Entities: %d", amount);
+	ImGui::Text("VAOs: %d", vao_counter);
 
 	if (ImGui::CollapsingHeader("Actions"))
 	{
@@ -597,6 +658,7 @@ void Game::manageUI()
 		ImGui::Text("Mouse wheel: Zoom along camera axis");
 		ImGui::Text("Space / Left Control: Zoom in / out (normal cursor); move up / down (free camera)");
 		ImGui::Text("Left Shift: Sprint");
+		ImGui::Text("E: Trigger explosion");
 		ImGui::Text("Left ALT: Toggle free mouse");
 	}
 
