@@ -70,6 +70,7 @@ bool ChunkInstanciator::compileChunksWithNeighbours(AChunk *chunk, s_neighbours 
 	if (!chunk) //not supposed to happen curently
 		return false;
 	glm::ivec2 chunkPos = chunk->getPos();
+	const bool replacingCompiledChunk = chunk->getIsCompiled();
 
 	if (!neighbours.north || !neighbours.south || !neighbours.east || !neighbours.west
 		|| !neighbours.north->getIsGeneratedMutex() || !neighbours.south->getIsGeneratedMutex()
@@ -93,9 +94,28 @@ bool ChunkInstanciator::compileChunksWithNeighbours(AChunk *chunk, s_neighbours 
 	info->pos = chunk->getPos();
 
 	vaoOperations_mutex.lock();
-	vaoOperations.push_back({vao_operation::Type::Add, info, info->pos});
+	bool prioritizeUpdate = replacingCompiledChunk;
+	for (auto operation = vaoOperations.begin(); operation != vaoOperations.end();)
+	{
+		if (operation->pos != info->pos)
+		{
+			++operation;
+			continue;
+		}
+
+		prioritizeUpdate = true;
+		if (operation->type == vao_operation::Type::Add)
+			delete operation->info;
+		operation = vaoOperations.erase(operation);
+	}
+	if (prioritizeUpdate)
+		vaoOperations.push_front({vao_operation::Type::Add, info, info->pos});
+	else
+		vaoOperations.push_back({vao_operation::Type::Add, info, info->pos});
 	vaoOperations_mutex.unlock();
 
+	chunk->setIsCompiled(true);
+	chunk->setToUpdate(false);
 
 	return true;
 
@@ -272,16 +292,6 @@ void ChunkInstanciator::updateChunk(glm::ivec2 chunkWorldPos, glm::ivec2 chunkTa
 	}
 	else if (!to_delete && chunk->getToUpdate())
 	{
-		if (chunk->getIsCompiled())
-		{
-			vaoOperations_mutex.lock();
-			vaoOperations.push_back({vao_operation::Type::Remove, NULL, chunk->getPos()});
-			vaoOperations_mutex.unlock();
-			chunk->setIsCompiled(false);
-		}
-
-		chunk->setToUpdate(false);
-
 		compileChunksWithNeighbours(chunk, getNeighbours(chunkTabPos, chunkWorldPos));
 
 	}

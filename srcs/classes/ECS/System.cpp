@@ -1,14 +1,31 @@
 #include <classes/ECS/System.hpp>
+#include <cmath>
 
 
 AChunk *getChunk(std::vector<std::vector<AChunk*>> &tabChunks, std::mutex &tabChunks_mutex, glm::vec3 pos)
 {
 	tabChunks_mutex.lock();
-	int size_tab = tabChunks.size();
+	const int size_tab = static_cast<int>(tabChunks.size());
+	if (size_tab == 0)
+	{
+		tabChunks_mutex.unlock();
+		return NULL;
+	}
 
-	glm::vec3 posChunk = glm::vec3((int)pos.x / 16, (int)pos.y / 16, (int)pos.z / 256);
+	const glm::ivec3 posChunk(
+		static_cast<int>(std::floor(pos.x / AChunk::sizeX)),
+		static_cast<int>(std::floor(pos.y / AChunk::sizeY)),
+		static_cast<int>(std::floor(pos.z / AChunk::sizeZ)));
 
-	AChunk* chunk = tabChunks[mod_floor(posChunk.x, size_tab)][mod_floor(posChunk.y, size_tab)];
+	const int tabX = mod_floor(posChunk.x, size_tab);
+	const int tabY = mod_floor(posChunk.y, size_tab);
+	if (tabY >= static_cast<int>(tabChunks[tabX].size()))
+	{
+		tabChunks_mutex.unlock();
+		return NULL;
+	}
+
+	AChunk* chunk = tabChunks[tabX][tabY];
 	if (chunk == NULL)
 	{
 		tabChunks_mutex.unlock();

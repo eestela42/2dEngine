@@ -434,7 +434,7 @@ void Game::manageVAO()
 	VAO operations are queued by the chunk worker because OpenGL objects must be
 	created and destroyed on the thread that owns the OpenGL context.
 	*/
-	const int maxVaoAdditionsPerFrame = 2;
+	const int maxVaoAdditionsPerFrame = 100;
 	std::deque<vao_operation> pendingOperations;
 	{
 		std::lock_guard<std::mutex> lock(vaoOperations_mutex);
@@ -470,17 +470,6 @@ void Game::manageVAO()
 			continue;
 		}
 
-		/*
-		A chunk update replaces the existing mesh for that position rather than
-		adding a duplicate VAO, so remove the old GPU object before installing the new one.
-		*/
-		if (existing != pos_to_vao.end())
-		{
-			vertexArrayObjectHandler->RemoveVAO(existing->second.VAO);
-			pos_to_vao.erase(existing);
-			vao_counter--;
-		}
-
 		t_vertexData dataStruct = {operation.info->vertices.data(), operation.info->vertices.size()};
 		const std::size_t indexDataSize =
 			operation.info->indices.size() * sizeof(unsigned int);
@@ -498,7 +487,17 @@ void Game::manageVAO()
 			shaderHandler->GetShader("default_texture"));
 
 		u_int VAO_id = vertexArrayObjectHandler->AddVAO(VAO);
-		pos_to_vao.insert({pos, {VAO_id}});
+		if (existing != pos_to_vao.end())
+		{
+			const u_int oldVAO = existing->second.VAO;
+			existing->second.VAO = VAO_id;
+			vertexArrayObjectHandler->RemoveVAO(oldVAO);
+			vao_counter--;
+		}
+		else
+		{
+			pos_to_vao.insert({pos, {VAO_id}});
+		}
 
 		delete operation.info;
 		vao_counter++;
@@ -570,6 +569,7 @@ void Game::manageUI()
 		ImGui::Text("Mouse wheel: Zoom along camera axis");
 		ImGui::Text("Space / Left Control: Zoom in / out (normal cursor); move up / down (free camera)");
 		ImGui::Text("Left Shift: Sprint");
+		ImGui::Text("E: Trigger explosion");
 		ImGui::Text("Left ALT: Toggle free mouse");
 	}
 

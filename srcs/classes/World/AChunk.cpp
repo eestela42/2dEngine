@@ -122,16 +122,15 @@ Successful changes mark the chunk for recompilation by setting toUpdate.
 */
 bool AChunk::pubChangeBlock(int x, int y, int z, u_char type)
 {
-	std::cout << "pubChangeBlock x : " << std::endl;
 	mutex.lock();
 	if (!isGenerated)
 	{
 		mutex.unlock();
 		return false;
 	}
-	bool ret = false;
-	ret = privChangeBlock(x, y, z, type);
-	toUpdate = true;
+	const bool ret = privChangeBlock(x, y, z, type);
+	if (ret)
+		toUpdate = true;
 	mutex.unlock();
 	return ret;
 }

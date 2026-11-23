@@ -27,6 +27,8 @@ void Player::DrawUI()
 	ImGui::SliderFloat("Movement speed", &speed, 0.01f, 0.5f, "%.2f");
 	ImGui::SliderFloat("Collision radius", &collisionRadius, 0.1f, 0.5f, "%.2f");
 	ImGui::Text("Position: (%.2f, %.2f, %.2f)", position.x, position.y, position.z);
+	if (ImGui::Button("Explosion (E)"))
+		TriggerExplosion();
 }
 
 
@@ -36,6 +38,8 @@ void Player::SendInput(const InputFrame &input)
 
 	const bool freeCamera = window->getCursorMode() == GLFW_CURSOR_DISABLED;
 	const float speedMultiplier = (keyState[KEY_SPRINT] & KEY_HOLD) ? 20.0f : 1.0f;
+	if (keyState[KEY_DELETE_MORE_BLOCK] & KEY_PRESS)
+		TriggerExplosion();
 	std::lock_guard<std::mutex> lock(positionMutex);
 
 	if (!freeCamera)
@@ -84,6 +88,60 @@ void Player::SendInput(const InputFrame &input)
 
 	if (keyState[KEY_SWITCH_CURSOR_MODE] & KEY_PRESS)
 		window->switchCursorMode();
+}
+
+void Player::TriggerExplosion()
+{
+	std::lock_guard<std::mutex> lock(positionMutex);
+	explodeAtPosition();
+}
+
+void Player::explodeAtPosition()
+{
+	if (!tabChunks || !tabChunks_mutex)
+		return;
+
+	const int centerX = static_cast<int>(std::floor(position.x));
+	const int centerZ = static_cast<int>(std::floor(position.z));
+	const int blockHeight = static_cast<int>(std::floor(position.y));
+	constexpr int explosionRadius = 20;
+	const int chunkSizeX = static_cast<int>(AChunk::sizeX);
+	const int chunkSizeZ = static_cast<int>(AChunk::sizeY);
+
+	for (int offset = -explosionRadius; offset <= explosionRadius; ++offset)
+	{
+		const int blockPositions[2][2] = {
+			{centerX + offset, centerZ},
+			{centerX, centerZ + offset}
+		};
+		const int positionCount = offset == 0 ? 1 : 2;
+		for (int i = 0; i < positionCount; ++i)
+		{
+			const int blockX = blockPositions[i][0];
+			const int blockZ = blockPositions[i][1];
+			const int chunkOriginX = static_cast<int>(std::floor(
+				static_cast<float>(blockX) / chunkSizeX)) * chunkSizeX;
+			const int chunkOriginZ = static_cast<int>(std::floor(
+				static_cast<float>(blockZ) / chunkSizeZ)) * chunkSizeZ;
+
+			AChunk *chunk = getChunk(
+				*tabChunks,
+				*tabChunks_mutex,
+				glm::vec3(blockX, blockZ, blockHeight));
+			if (!chunk)
+				continue;
+
+			chunk->pubChangeBlock(
+				blockX - chunkOriginX,
+				blockZ - chunkOriginZ,
+				blockHeight,
+				AIR);
+			{
+				std::lock_guard<std::mutex> lock(*tabChunks_mutex);
+				chunk->deleter();
+			}
+		}
+	}
 }
 
 bool Player::isBlockFilled(int blockX, int blockZ, int blockHeight) const
