@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <iostream>
+#include <set>
 #include "../../../imgui/imgui.h"
 #include "../../../imgui/backends/imgui_impl_glfw.h"
 #include "../../../imgui/backends/imgui_impl_opengl3.h"
@@ -434,8 +435,9 @@ void Game::manageVAO()
 	VAO operations are queued by the chunk worker because OpenGL objects must be
 	created and destroyed on the thread that owns the OpenGL context.
 	*/
-	const int maxVaoAdditionsPerFrame = 100;
+	const int maxVaoAdditionsPerFrame = 32;
 	std::deque<vao_operation> pendingOperations;
+	std::set<std::pair<int, int>> replacementsInFlight;
 	{
 		std::lock_guard<std::mutex> lock(vaoOperations_mutex);
 		int additionsThisFrame = 0;
@@ -447,8 +449,33 @@ void Game::manageVAO()
 
 			if (vaoOperations.front().type == vao_operation::Type::Add)
 				++additionsThisFrame;
-			pendingOperations.push_back(vaoOperations.front());
+
+			const vao_operation operation = vaoOperations.front();
 			vaoOperations.pop_front();
+			pendingOperations.push_back(operation);
+
+			if (operation.type == vao_operation::Type::Add && operation.replacesExisting)
+			{
+				replacementsInFlight.emplace(operation.pos.x, operation.pos.y);
+				for (auto queued = vaoOperations.begin(); queued != vaoOperations.end();)
+				{
+					if (queued->pos != operation.pos)
+					{
+						++queued;
+						continue;
+					}
+
+					if (queued->type == vao_operation::Type::Add)
+						delete queued->info;
+					queued = vaoOperations.erase(queued);
+				}
+			}
+		}
+
+		for (const vao_operation &operation : vaoOperations)
+		{
+			if (operation.type == vao_operation::Type::Add && operation.replacesExisting)
+				replacementsInFlight.emplace(operation.pos.x, operation.pos.y);
 		}
 	}
 
@@ -461,6 +488,9 @@ void Game::manageVAO()
 
 		if (operation.type == vao_operation::Type::Remove)
 		{
+			if (replacementsInFlight.count({operation.pos.x, operation.pos.y}) != 0)
+				continue;
+
 			if (existing != pos_to_vao.end())
 			{
 				vertexArrayObjectHandler->RemoveVAO(existing->second.VAO);
@@ -523,6 +553,7 @@ void Game::manageUI()
 	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", cameraPosition.x, cameraPosition.y, cameraPosition.z);
 	ImGui::Text("Seed: %ld", chunkInstanciator->getCurrentSeed());
 	ImGui::Text("Entities: %d", amount);
+	ImGui::Text("VAOs: %d", vao_counter);
 
 	if (ImGui::CollapsingHeader("Actions"))
 	{

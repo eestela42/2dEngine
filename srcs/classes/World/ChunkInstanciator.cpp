@@ -93,25 +93,13 @@ bool ChunkInstanciator::compileChunksWithNeighbours(AChunk *chunk, s_neighbours 
 	info->indices = *chunk->pubGetPtrIndices();
 	info->pos = chunk->getPos();
 
+	vao_operation operation{vao_operation::Type::Add, info, info->pos};
+	operation.replacesExisting = replacingCompiledChunk;
 	vaoOperations_mutex.lock();
-	bool prioritizeUpdate = replacingCompiledChunk;
-	for (auto operation = vaoOperations.begin(); operation != vaoOperations.end();)
-	{
-		if (operation->pos != info->pos)
-		{
-			++operation;
-			continue;
-		}
-
-		prioritizeUpdate = true;
-		if (operation->type == vao_operation::Type::Add)
-			delete operation->info;
-		operation = vaoOperations.erase(operation);
-	}
-	if (prioritizeUpdate)
-		vaoOperations.push_front({vao_operation::Type::Add, info, info->pos});
+	if (operation.replacesExisting)
+		vaoOperations.push_front(operation);
 	else
-		vaoOperations.push_back({vao_operation::Type::Add, info, info->pos});
+		vaoOperations.push_back(operation);
 	vaoOperations_mutex.unlock();
 
 	chunk->setIsCompiled(true);

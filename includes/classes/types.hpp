@@ -42,6 +42,7 @@ struct vao_operation
 	Type		type;
 	info_VAO	*info;
 	glm::ivec2	pos;
+	bool		replacesExisting = false;
 };
 
 struct VAO_data
