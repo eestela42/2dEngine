@@ -29,6 +29,10 @@ void Player::DrawUI()
 	ImGui::Text("Position: (%.2f, %.2f, %.2f)", position.x, position.y, position.z);
 	if (ImGui::Button("Explosion (E)"))
 		TriggerExplosion();
+	if (ImGui::Button("Toggle Auto Move (Q)"))
+		autoMove = !autoMove;
+	if (ImGui::Button("Toggle Collision"))
+		enableColision = !enableColision;
 }
 
 
@@ -280,7 +284,7 @@ void Player::moveWithCollision(const glm::vec3 &direction, float distance)
 			if (allowedDistance <= 0.000001f)
 				break;
 			const glm::vec2 stepDirection = allowedStep / allowedDistance;
-			if (!findBlockingNormal(candidate, position, stepDirection, normal))
+			if (!enableColision || !findBlockingNormal(candidate, position, stepDirection, normal))
 			{
 				position.x += allowedStep.x;
 				position.z += allowedStep.y;

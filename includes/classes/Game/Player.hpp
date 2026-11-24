@@ -26,6 +26,7 @@ public:
 
 	bool SetupChunks(std::vector<std::vector<AChunk*>> &tabChunks, std::mutex &tabChunks_mutex);
 
+
 private:
 	void explodeAtPosition();
 	bool isBlockFilled(int blockX, int blockZ, int blockHeight) const;
@@ -45,6 +46,7 @@ private:
 	glm::vec3 movementDirection = glm::vec3(0.0f, 0.0f, -1.0f);
 	std::mutex positionMutex;
 	bool autoMove = false;
+	bool enableColision = true;
 
 	//THIS IS TEMPORARY AND SHOULD BE PUT IN THE ECS
 	std::vector<std::vector<AChunk*>> *tabChunks = nullptr;
